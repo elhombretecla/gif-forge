@@ -1,12 +1,15 @@
 # SPDX-FileCopyrightText: 2026 Juan de la Cruz García <delacruzgarciajuan@gmail.com>
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""The main recorder window and full record→encode→save workflow (T5).
+"""The recorder: a small capture frame plus a separate floating control bar.
 
-The window frames a transparent capture region (the desktop shows through on a
-compositing desktop). Pressing Record runs an optional countdown, captures the
-region via the best available backend, encodes off the main thread, then offers
-a save dialog and a desktop notification.
+The capture frame is a near-chromeless window whose interior *is* the recorded
+region (the desktop shows through on a compositing desktop). All the controls
+(format, size, Record, timer, status, menu) live in a **separate** window so
+they no longer dictate the frame's minimum width — the frame can be shrunk to
+tiny sizes (e.g. 300×200) for small GIFs. Pressing Record runs an optional
+countdown, captures the region via the best available backend, encodes off the
+main thread, then offers a save dialog and a desktop notification.
 
 Region extraction uses X11 absolute geometry today; on Wayland the ScreenCast
 portal supplies the region (T4), so :meth:`_extract_area` raises a clear error
@@ -36,10 +39,19 @@ from ..settings import get_settings  # noqa: E402
 
 log = logging.getLogger(__name__)
 
+# The capture frame can be made this small (logical px). The old single-window
+# layout was bounded at ~612px wide by the control widgets; with the controls
+# split into their own window the only floor we keep is a sane usable minimum.
+_MIN_CAPTURE = 32
+
 _CSS = b"""
 .gifforge-recorder.background { background-color: transparent; }
-.gifforge-recorder headerbar { background-color: @headerbar_bg_color; }
-.recorder-bottom-bar { background-color: @window_bg_color; padding: 8px 12px; }
+.gifforge-recorder headerbar {
+  background-color: @headerbar_bg_color;
+  min-height: 0;
+  padding: 0 4px;
+}
+.recorder-control-bar { background-color: @window_bg_color; padding: 8px 12px; }
 .capture-area {
   background-color: transparent;
   box-shadow: inset 0 0 0 2px alpha(@accent_color, 0.8);
@@ -56,10 +68,17 @@ _CSS = b"""
 
 
 class RecorderWindow(Adw.ApplicationWindow):
+    """The transparent capture frame and the full record→encode→save workflow.
+
+    Owns the capture geometry, X11 click-through/keep-above and the recording
+    flow. The user-facing controls live in a sibling :class:`_ControlBar`, which
+    this window creates, shows and drives.
+    """
+
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.set_title(APP_NAME)
-        self.set_default_size(520, 360)
+        self.set_default_size(400, 300)
         self.add_css_class("gifforge-recorder")
 
         self._settings = get_settings()
@@ -68,13 +87,18 @@ class RecorderWindow(Adw.ApplicationWindow):
         self._timer_source: int = 0
         self._elapsed: int = 0
         self._save_dialog: Optional[Gtk.FileChooserNative] = None
-        self._syncing_size = False  # guard against spin<->capture-area feedback
+        self._syncing_size = False  # guard against control<->capture-area feedback
+        self._closing = False
 
         self._install_css()
         self._build_ui()
-        self._init_format_from_settings()
-        # Float above other windows and let clicks pass through the capture hole.
+
+        # The control bar holds every recording control, decoupled from the
+        # frame's size. Created here, shown when the frame is first mapped.
+        self._controls = _ControlBar(self, application=self.get_application())
+
         self.connect("map", self._on_mapped)
+        self.connect("close-request", self._on_close_request)
 
     # --- construction --------------------------------------------------------
 
@@ -88,31 +112,29 @@ class RecorderWindow(Adw.ApplicationWindow):
     def _build_ui(self) -> None:
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
 
+        # A slim header bar gives the frame native move/resize and a close
+        # button, but packs no controls of its own so it never widens the frame.
+        # An empty title widget keeps the centre clear without relying on the
+        # newer Adw.HeaderBar:show-title property.
         header = Adw.HeaderBar()
-        self._format_dropdown = Gtk.DropDown.new_from_strings(
-            [fmt.value.upper() for fmt in OutputFormat]
-        )
-        self._format_dropdown.set_tooltip_text("Output format")
-        header.pack_start(self._format_dropdown)
-
-        menu_button = Gtk.MenuButton(icon_name="open-menu-symbolic")
-        menu = Gtk.Builder.new_from_string(_MENU_XML, -1).get_object("primary-menu")
-        menu_button.set_menu_model(menu)
-        header.pack_end(menu_button)
+        header.set_title_widget(Gtk.Label())
         root.append(header)
 
         # Transparent capture region (a DrawingArea so we get a `resize` signal
         # to keep the size inputs in sync), with hint + countdown overlays.
         overlay = Gtk.Overlay(vexpand=True)
         self._capture_area = Gtk.DrawingArea(hexpand=True, vexpand=True)
+        self._capture_area.set_size_request(_MIN_CAPTURE, _MIN_CAPTURE)
         self._capture_area.add_css_class("capture-area")
         self._capture_area.connect("resize", self._on_capture_resize)
         overlay.set_child(self._capture_area)
 
-        self._hint = Gtk.Label(label="Position this window over what you want to capture")
+        self._hint = Gtk.Label(label="Drag over what you want to capture")
         self._hint.add_css_class("dim-label")
         self._hint.set_halign(Gtk.Align.CENTER)
         self._hint.set_valign(Gtk.Align.CENTER)
+        self._hint.set_wrap(True)
+        self._hint.set_justify(Gtk.Justification.CENTER)
         self._hint.set_can_target(False)
         overlay.add_overlay(self._hint)
 
@@ -125,108 +147,60 @@ class RecorderWindow(Adw.ApplicationWindow):
         overlay.add_overlay(self._countdown_label)
         root.append(overlay)
 
-        root.append(self._build_bottom_bar())
         self.set_content(root)
-
-    def _build_bottom_bar(self) -> Gtk.Box:
-        bottom = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        bottom.add_css_class("recorder-bottom-bar")
-
-        # Left: editable recording-size inputs (in output pixels). Plain entries
-        # (no spin steppers) — applied on Enter or focus-out, clamped on apply.
-        size_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-        size_box.set_valign(Gtk.Align.CENTER)
-        self._width_entry = self._make_size_entry("Recording width in pixels")
-        self._height_entry = self._make_size_entry("Recording height in pixels")
-        times = Gtk.Label(label="×")
-        times.add_css_class("dim-label")
-        unit = Gtk.Label(label="px")
-        unit.add_css_class("dim-label")
-        size_box.append(self._width_entry)
-        size_box.append(times)
-        size_box.append(self._height_entry)
-        size_box.append(unit)
-        bottom.append(size_box)
-
-        bottom.append(Gtk.Box(hexpand=True))
-
-        # Right: status + spinner + the Record button.
-        self._status_label = Gtk.Label(label="", xalign=1)
-        self._status_label.add_css_class("dim-label")
-        self._status_label.set_ellipsize(Pango.EllipsizeMode.END)
-        self._status_label.set_max_width_chars(16)
-        bottom.append(self._status_label)
-
-        self._spinner = Gtk.Spinner()
-        bottom.append(self._spinner)
-
-        # Timer + Record button live in a tight box so the elapsed-time counter
-        # sits flush against the button while recording.
-        controls = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        controls.set_valign(Gtk.Align.CENTER)
-
-        self._timer_label = Gtk.Label(label="00:00")
-        self._timer_label.add_css_class("recording-timer")
-        self._timer_label.set_visible(False)
-        self._timer_label.set_can_target(False)
-        controls.append(self._timer_label)
-
-        self._record_button = Gtk.Button(label="Record")
-        self._record_button.add_css_class("suggested-action")
-        self._record_button.connect("clicked", lambda *_: self.toggle_recording())
-        controls.append(self._record_button)
-
-        bottom.append(controls)
-        return bottom
 
     # --- public API ----------------------------------------------------------
 
-    def _init_format_from_settings(self) -> None:
-        formats = list(OutputFormat)
-        current = self._settings.get("recording-output-format")
-        index = next((i for i, f in enumerate(formats) if f.value == current), 0)
-        self._format_dropdown.set_selected(index)
-        self._format_dropdown.connect(
-            "notify::selected",
-            lambda d, _p: self._settings.set(
-                "recording-output-format", self.selected_format.value
-            ),
-        )
-
     @property
     def selected_format(self) -> OutputFormat:
-        return list(OutputFormat)[self._format_dropdown.get_selected()]
+        return self._controls.selected_format
 
-    # --- recording-size inputs ----------------------------------------------
+    def toggle_recording(self) -> None:
+        if self._controller is not None and self._controller.is_recording:
+            self._stop_recording()
+        elif self._countdown_source:
+            self._cancel_countdown()
+        else:
+            self._begin_countdown()
+
+    def request_capture_size(self, w_dev: int, h_dev: int) -> None:
+        """Resize the frame so the capture area becomes *w_dev*×*h_dev* (device px).
+
+        Driven by the control bar's size inputs. We add the current "chrome"
+        (header height; width chrome is ~0) so the *capture area* lands on the
+        requested size. The window manager clamps to its minimum; the resulting
+        `resize` signal syncs the inputs back to whatever was achieved.
+        """
+        if self._syncing_size:
+            return
+        scale = self._scale_factor()
+        desired_w = max(1, round(w_dev / scale))
+        desired_h = max(1, round(h_dev / scale))
+        cap_w = self._capture_area.get_width() or desired_w
+        cap_h = self._capture_area.get_height() or desired_h
+        chrome_w = max(0, self.get_width() - cap_w)
+        chrome_h = max(0, self.get_height() - cap_h)
+        self.set_default_size(desired_w + chrome_w, desired_h + chrome_h)
+        # Reflect the normalized values now; the resize signal refines them.
+        self._controls.set_size_inputs(w_dev, h_dev)
+
+    # --- recording-size sync -------------------------------------------------
 
     def _scale_factor(self) -> int:
         native = self.get_native()
         surface = native.get_surface() if native else None
         return surface.get_scale_factor() if surface else 1
 
-    def _make_size_entry(self, tooltip: str) -> Gtk.Entry:
-        entry = Gtk.Entry(width_chars=5, max_width_chars=6, xalign=0.5)
-        entry.set_input_purpose(Gtk.InputPurpose.DIGITS)
-        entry.set_tooltip_text(tooltip)
-        entry.connect("activate", lambda _e: self._on_size_entered())
-        focus = Gtk.EventControllerFocus()
-        focus.connect("leave", lambda _c: self._on_size_entered())
-        entry.add_controller(focus)
-        return entry
-
-    def _entry_int(self, entry: Gtk.Entry, fallback: int) -> int:
-        try:
-            return max(16, min(16384, int(entry.get_text().strip())))
-        except (ValueError, TypeError):
-            return int(fallback)
-
     def _on_capture_resize(self, _area, width: int, height: int) -> None:
         """Capture area was resized: reflect its pixel size in the inputs."""
         scale = self._scale_factor()
-        self._set_size_inputs(width * scale, height * scale)
+        self._controls.set_size_inputs(width * scale, height * scale)
+
+    # --- window lifecycle ----------------------------------------------------
 
     def _on_mapped(self, *_args) -> None:
-        """Once shown: keep the recorder above the rest of the desktop."""
+        """Once shown: float the frame and bring up the control bar."""
+        self._controls.present()
         from ..capture import detect_session
         from ..capture.factory import SessionType
 
@@ -243,14 +217,21 @@ class RecorderWindow(Adw.ApplicationWindow):
         except Exception as exc:  # noqa: BLE001
             log.debug("keep-above failed: %s", exc)
 
+    def _on_close_request(self, *_args) -> bool:
+        """Closing the frame tears down the control bar too."""
+        if not self._closing:
+            self._closing = True
+            self._controls.close()
+        return False
+
     def _set_click_through(self, enabled: bool) -> None:
         """Toggle click-through over the capture hole.
 
         While recording (*enabled*), clicks over the transparent capture area
-        pass through to the windows behind; only the chrome (header, controls,
-        border) stays interactive — so you can still drag the window or press
-        Stop. When idle the whole window is interactive again, so it can be
-        moved and resized normally.
+        pass through to the windows behind; only the header strip stays
+        interactive, so the frame can still be dragged. The control bar is a
+        separate window and remains fully usable (Stop lives there). When idle
+        the whole frame is interactive again.
         """
         from ..capture import detect_session
         from ..capture.factory import SessionType
@@ -288,48 +269,11 @@ class RecorderWindow(Adw.ApplicationWindow):
         except Exception as exc:  # noqa: BLE001 - never block recording on this
             log.debug("click-through toggle failed: %s", exc)
 
-    def _set_size_inputs(self, width: int, height: int) -> None:
-        self._syncing_size = True
-        self._width_entry.set_text(str(int(width)))
-        self._height_entry.set_text(str(int(height)))
-        self._syncing_size = False
-
-    def _on_size_entered(self) -> None:
-        """User typed a size: resize the window so the capture area matches.
-
-        We resize the whole window by the requested capture size plus the
-        current "chrome" (header + bottom bar). The window manager clamps to the
-        minimum usable size; the resulting `resize` signal syncs the inputs back
-        to whatever size was actually achieved.
-        """
-        if self._syncing_size:
-            return
-        scale = self._scale_factor()
-        w_dev = self._entry_int(self._width_entry, (self._capture_area.get_width() or 1) * scale)
-        h_dev = self._entry_int(self._height_entry, (self._capture_area.get_height() or 1) * scale)
-        desired_w = max(1, round(w_dev / scale))
-        desired_h = max(1, round(h_dev / scale))
-        cap_w = self._capture_area.get_width() or desired_w
-        cap_h = self._capture_area.get_height() or desired_h
-        chrome_w = max(0, self.get_width() - cap_w)
-        chrome_h = max(0, self.get_height() - cap_h)
-        self.set_default_size(desired_w + chrome_w, desired_h + chrome_h)
-        # Reflect the normalized values now; the resize signal refines them.
-        self._set_size_inputs(w_dev, h_dev)
-
-    def toggle_recording(self) -> None:
-        if self._controller is not None and self._controller.is_recording:
-            self._stop_recording()
-        elif self._countdown_source:
-            self._cancel_countdown()
-        else:
-            self._begin_countdown()
-
     # --- recording flow ------------------------------------------------------
 
     def _build_config(self) -> RecordingConfig:
         # All recording settings come from the persisted preferences; the
-        # header-bar dropdown only overrides the output format for this run.
+        # control-bar dropdown only overrides the output format for this run.
         config = self._settings.to_recording_config()
         config.output_format = self.selected_format
         return config
@@ -338,7 +282,7 @@ class RecorderWindow(Adw.ApplicationWindow):
         config = self._build_config()
         self._pending_config = config
         delay = config.start_delay
-        self._set_button("Cancel", "destructive-action")
+        self._controls.set_record_button("Cancel", "destructive-action")
         if delay <= 0:
             self._start_recording()
             return
@@ -361,21 +305,20 @@ class RecorderWindow(Adw.ApplicationWindow):
 
     def _start_timer(self) -> None:
         self._elapsed = 0
-        self._timer_label.set_label("00:00")
-        self._timer_label.set_visible(True)
+        self._controls.update_timer("00:00", visible=True)
         self._timer_source = GLib.timeout_add_seconds(1, self._on_timer_tick)
 
     def _on_timer_tick(self) -> bool:
         self._elapsed += 1
         minutes, seconds = divmod(self._elapsed, 60)
-        self._timer_label.set_label(f"{minutes:02d}:{seconds:02d}")
+        self._controls.update_timer(f"{minutes:02d}:{seconds:02d}", visible=True)
         return True
 
     def _stop_timer(self) -> None:
         if self._timer_source:
             GLib.source_remove(self._timer_source)
             self._timer_source = 0
-        self._timer_label.set_visible(False)
+        self._controls.update_timer("", visible=False)
 
     def _cancel_countdown(self) -> None:
         if self._countdown_source:
@@ -394,7 +337,7 @@ class RecorderWindow(Adw.ApplicationWindow):
 
         self._controller = RecordingController(self._pending_config)
         try:
-            backend = self._controller.start(area)
+            backend = self._controller.start(area)  # noqa: F841
         except Exception as exc:  # noqa: BLE001
             self._controller = None
             self._show_error("Could not start recording", str(exc))
@@ -403,20 +346,20 @@ class RecorderWindow(Adw.ApplicationWindow):
 
         self._hint.set_visible(False)
         self._set_click_through(True)  # let clicks reach the app being recorded
-        self._set_button("Stop", "destructive-action")
-        self._status_label.set_label("")
+        self._controls.set_record_button("Stop", "destructive-action")
+        self._controls.set_status("")
         self._start_timer()
 
     def _stop_recording(self) -> None:
         self._stop_timer()
         self._set_click_through(False)  # restore full interactivity immediately
-        self._set_button(None, None, sensitive=False)
-        self._spinner.start()
+        self._controls.set_record_button(None, None, sensitive=False)
+        self._controls.start_spinner()
         if self._settings.get("interface-open-editor-after-recording"):
-            self._status_label.set_label("Processing…")
+            self._controls.set_status("Processing…")
             thread = threading.Thread(target=self._editor_worker, daemon=True)
         else:
-            self._status_label.set_label("Encoding…")
+            self._controls.set_status("Encoding…")
             thread = threading.Thread(target=self._encode_worker, daemon=True)
         thread.start()
 
@@ -448,13 +391,13 @@ class RecorderWindow(Adw.ApplicationWindow):
     def _open_editor(self, frames, cache) -> bool:
         from .editor_window import EditorWindow
 
-        self._spinner.stop()
+        self._controls.stop_spinner()
         editor = EditorWindow(application=self.get_application())
         editor.present()
         # The editor adopts the decoded-frame cache and cleans it up on close.
         editor.load(frames, cache=cache)
-        # The recorder window is no longer needed once the editor is up; close
-        # it. The app keeps running because the editor window is still open.
+        # The recorder is no longer needed once the editor is up; close it (and
+        # its control bar). The app keeps running because the editor is open.
         app = self.get_application()
         if app is not None and getattr(app, "_window", None) is self:
             app._window = None
@@ -462,12 +405,12 @@ class RecorderWindow(Adw.ApplicationWindow):
         return False
 
     def _on_encoded(self, output: Path) -> bool:
-        self._spinner.stop()
+        self._controls.stop_spinner()
         self._show_save_dialog(output)
         return False
 
     def _on_encode_failed(self, message: str) -> bool:
-        self._spinner.stop()
+        self._controls.stop_spinner()
         self._show_error("Encoding failed", message)
         self._reset_idle_ui()
         return False
@@ -479,9 +422,9 @@ class RecorderWindow(Adw.ApplicationWindow):
 
         All maths are kept in device pixels: the X11 window origin is already in
         device pixels, the capture-area offset (logical) is scaled by the HiDPI
-        factor, and the *size* comes from the editable inputs — so it can never
-        collapse to zero. Mixing device origin with logical bounds was the cause
-        of the "recording area has zero size" error.
+        factor, and the *size* comes from the capture area allocation — so it can
+        never collapse to zero. Mixing device origin with logical bounds was the
+        cause of the "recording area has zero size" error.
         """
         from ..capture import detect_session
         from ..capture.factory import SessionType
@@ -520,8 +463,8 @@ class RecorderWindow(Adw.ApplicationWindow):
 
         # Size tracks the actual capture area (WYSIWYG); the inputs stay in sync
         # with it. Falls back to the input values if not yet allocated.
-        width = self._capture_area.get_width() * scale or self._entry_int(self._width_entry, 16)
-        height = self._capture_area.get_height() * scale or self._entry_int(self._height_entry, 16)
+        width = self._capture_area.get_width() * scale or self._controls.input_width()
+        height = self._capture_area.get_height() * scale or self._controls.input_height()
 
         # Clip to the visible screen, all in device pixels.
         screen_w, screen_h = self._virtual_screen_size()
@@ -574,10 +517,10 @@ class RecorderWindow(Adw.ApplicationWindow):
                 dest = gfile.get_path()
                 shutil.move(str(output), dest)
                 self._notify_saved(Path(dest))
-                self._status_label.set_label(f"Saved to {dest}")
+                self._controls.set_status(f"Saved to {dest}")
             else:
                 Path(output).unlink(missing_ok=True)
-                self._status_label.set_label("Discarded")
+                self._controls.set_status("Discarded")
         finally:
             dialog.destroy()
             self._save_dialog = None
@@ -595,24 +538,12 @@ class RecorderWindow(Adw.ApplicationWindow):
 
     # --- ui helpers ----------------------------------------------------------
 
-    def _set_button(
-        self, label: Optional[str], css: Optional[str], *, sensitive: bool = True
-    ) -> None:
-        for klass in ("suggested-action", "destructive-action"):
-            self._record_button.remove_css_class(klass)
-        if label is not None:
-            self._record_button.set_label(label)
-        if css is not None:
-            self._record_button.add_css_class(css)
-        self._record_button.set_sensitive(sensitive)
-
     def _reset_idle_ui(self) -> None:
         self._stop_timer()
         self._set_click_through(False)
         self._hint.set_visible(True)
-        self._set_button("Record", "suggested-action", sensitive=True)
-        if not self._status_label.get_label().startswith("Saved"):
-            self._status_label.set_label("")
+        self._controls.set_record_button("Record", "suggested-action", sensitive=True)
+        self._controls.reset_status_if_idle()
 
     def _show_error(self, title: str, detail: str) -> None:
         log.error("%s: %s", title, detail)
@@ -626,6 +557,210 @@ class RecorderWindow(Adw.ApplicationWindow):
         )
         dialog.connect("response", lambda d, _r: d.destroy())
         dialog.show()
+
+
+class _ControlBar(Adw.ApplicationWindow):
+    """Floating toolbar holding every recording control.
+
+    Kept as a window of its own so the recording controls no longer constrain
+    the capture frame's width — the frame can be made arbitrarily small while
+    these controls float beside it.
+    """
+
+    def __init__(self, recorder: "RecorderWindow", **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._recorder = recorder
+        self._settings = recorder._settings
+        self._syncing_size = False
+        self._closing = False
+
+        self.set_title(f"{APP_NAME} — Controls")
+        self.set_resizable(False)
+        self.set_default_size(420, -1)
+
+        self._build_ui()
+        self._init_format_from_settings()
+        self.connect("map", self._on_mapped)
+        self.connect("close-request", self._on_close_request)
+
+    # --- construction --------------------------------------------------------
+
+    def _build_ui(self) -> None:
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+
+        header = Adw.HeaderBar()
+        self._format_dropdown = Gtk.DropDown.new_from_strings(
+            [fmt.value.upper() for fmt in OutputFormat]
+        )
+        self._format_dropdown.set_tooltip_text("Output format")
+        header.pack_start(self._format_dropdown)
+
+        menu_button = Gtk.MenuButton(icon_name="open-menu-symbolic")
+        menu = Gtk.Builder.new_from_string(_MENU_XML, -1).get_object("primary-menu")
+        menu_button.set_menu_model(menu)
+        header.pack_end(menu_button)
+        root.append(header)
+
+        root.append(self._build_control_row())
+        self.set_content(root)
+
+    def _build_control_row(self) -> Gtk.Box:
+        bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        bar.add_css_class("recorder-control-bar")
+
+        # Left: editable recording-size inputs (in output pixels). Plain entries
+        # (no spin steppers) — applied on Enter or focus-out, clamped on apply.
+        size_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        size_box.set_valign(Gtk.Align.CENTER)
+        self._width_entry = self._make_size_entry("Recording width in pixels")
+        self._height_entry = self._make_size_entry("Recording height in pixels")
+        times = Gtk.Label(label="×")
+        times.add_css_class("dim-label")
+        unit = Gtk.Label(label="px")
+        unit.add_css_class("dim-label")
+        size_box.append(self._width_entry)
+        size_box.append(times)
+        size_box.append(self._height_entry)
+        size_box.append(unit)
+        bar.append(size_box)
+
+        bar.append(Gtk.Box(hexpand=True))
+
+        # Right: status + spinner + the Record button.
+        self._status_label = Gtk.Label(label="", xalign=1)
+        self._status_label.add_css_class("dim-label")
+        self._status_label.set_ellipsize(Pango.EllipsizeMode.END)
+        self._status_label.set_max_width_chars(16)
+        bar.append(self._status_label)
+
+        self._spinner = Gtk.Spinner()
+        bar.append(self._spinner)
+
+        # Timer + Record button live in a tight box so the elapsed-time counter
+        # sits flush against the button while recording.
+        controls = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        controls.set_valign(Gtk.Align.CENTER)
+
+        self._timer_label = Gtk.Label(label="00:00")
+        self._timer_label.add_css_class("recording-timer")
+        self._timer_label.set_visible(False)
+        self._timer_label.set_can_target(False)
+        controls.append(self._timer_label)
+
+        self._record_button = Gtk.Button(label="Record")
+        self._record_button.add_css_class("suggested-action")
+        self._record_button.connect("clicked", lambda *_: self._recorder.toggle_recording())
+        controls.append(self._record_button)
+
+        bar.append(controls)
+        return bar
+
+    def _init_format_from_settings(self) -> None:
+        formats = list(OutputFormat)
+        current = self._settings.get("recording-output-format")
+        index = next((i for i, f in enumerate(formats) if f.value == current), 0)
+        self._format_dropdown.set_selected(index)
+        self._format_dropdown.connect(
+            "notify::selected",
+            lambda d, _p: self._settings.set(
+                "recording-output-format", self.selected_format.value
+            ),
+        )
+
+    # --- size inputs ---------------------------------------------------------
+
+    def _make_size_entry(self, tooltip: str) -> Gtk.Entry:
+        entry = Gtk.Entry(width_chars=5, max_width_chars=6, xalign=0.5)
+        entry.set_input_purpose(Gtk.InputPurpose.DIGITS)
+        entry.set_tooltip_text(tooltip)
+        entry.connect("activate", lambda _e: self._on_size_entered())
+        focus = Gtk.EventControllerFocus()
+        focus.connect("leave", lambda _c: self._on_size_entered())
+        entry.add_controller(focus)
+        return entry
+
+    def _entry_int(self, entry: Gtk.Entry, fallback: int) -> int:
+        try:
+            return max(_MIN_CAPTURE, min(16384, int(entry.get_text().strip())))
+        except (ValueError, TypeError):
+            return int(fallback)
+
+    def input_width(self) -> int:
+        return self._entry_int(self._width_entry, _MIN_CAPTURE)
+
+    def input_height(self) -> int:
+        return self._entry_int(self._height_entry, _MIN_CAPTURE)
+
+    def set_size_inputs(self, width: int, height: int) -> None:
+        self._syncing_size = True
+        self._width_entry.set_text(str(int(width)))
+        self._height_entry.set_text(str(int(height)))
+        self._syncing_size = False
+
+    def _on_size_entered(self) -> None:
+        if self._syncing_size:
+            return
+        self._recorder.request_capture_size(self.input_width(), self.input_height())
+
+    # --- control state (driven by the recorder) ------------------------------
+
+    @property
+    def selected_format(self) -> OutputFormat:
+        return list(OutputFormat)[self._format_dropdown.get_selected()]
+
+    def set_record_button(
+        self, label: Optional[str], css: Optional[str], *, sensitive: bool = True
+    ) -> None:
+        for klass in ("suggested-action", "destructive-action"):
+            self._record_button.remove_css_class(klass)
+        if label is not None:
+            self._record_button.set_label(label)
+        if css is not None:
+            self._record_button.add_css_class(css)
+        self._record_button.set_sensitive(sensitive)
+
+    def set_status(self, text: str) -> None:
+        self._status_label.set_label(text)
+
+    def reset_status_if_idle(self) -> None:
+        if not self._status_label.get_label().startswith("Saved"):
+            self._status_label.set_label("")
+
+    def update_timer(self, text: str, *, visible: bool) -> None:
+        self._timer_label.set_label(text)
+        self._timer_label.set_visible(visible)
+
+    def start_spinner(self) -> None:
+        self._spinner.start()
+
+    def stop_spinner(self) -> None:
+        self._spinner.stop()
+
+    # --- window lifecycle ----------------------------------------------------
+
+    def _on_mapped(self, *_args) -> None:
+        from ..capture import detect_session
+        from ..capture.factory import SessionType
+
+        if detect_session() != SessionType.X11:
+            return
+        native = self.get_native()
+        surface = native.get_surface() if native else None
+        if surface is None:
+            return
+        try:
+            from ..platform.x11_window import set_keep_above
+
+            set_keep_above(surface.get_xid())
+        except Exception as exc:  # noqa: BLE001
+            log.debug("control-bar keep-above failed: %s", exc)
+
+    def _on_close_request(self, *_args) -> bool:
+        """Closing the control bar closes the whole recorder."""
+        if not self._closing:
+            self._closing = True
+            self._recorder.close()
+        return False
 
 
 _MENU_XML = """
