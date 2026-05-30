@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=GIF Forge
+Exec=gif-forge
+GenericName=Screen recorder and GIF editor
+Comment=Record your screen and edit it into an optimized GIF, video or APNG
+Keywords=screencast;screen recorder;screen capture;GIF;WebM;APNG;editor;timeline;
+Icon=io.github.elhombretecla.GifForge
+Type=Application
+Categories=AudioVideo;Recorder;GTK;
+StartupNotify=true
+Terminal=false

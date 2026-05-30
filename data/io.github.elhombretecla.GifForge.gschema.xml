@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema path="/io/github/elhombretecla/GifForge/" id="io.github.elhombretecla.GifForge"
+    gettext-domain="gif-forge">
+    <key name="recording-output-format" type="s">
+      <choices>
+        <choice value="gif"/>
+        <choice value="apng"/>
+        <choice value="webm"/>
+      </choices>
+      <default>"gif"</default>
+      <summary>Output file format</summary>
+    </key>
+    <key name="recording-framerate" type="i">
+      <range min="1" max="60"/>
+      <default>10</default>
+      <summary>Framerate</summary>
+    </key>
+    <key name="recording-downsample" type="i">
+      <range min="1" max="4"/>
+      <default>1</default>
+      <summary>Resolution downsampling factor</summary>
+    </key>
+    <key name="recording-capture-mouse" type="b">
+      <default>true</default>
+      <summary>Whether to capture the mouse cursor</summary>
+    </key>
+    <key name="recording-capture-sound" type="b">
+      <default>false</default>
+      <summary>Whether to capture sound from the default input device</summary>
+    </key>
+    <key name="recording-start-delay" type="i">
+      <range min="0" max="60"/>
+      <default>3</default>
+      <summary>Delay in seconds before recording starts</summary>
+    </key>
+    <key name="recording-gifski-enabled" type="b">
+      <default>false</default>
+      <summary>Use gifski for high quality GIFs</summary>
+    </key>
+    <key name="recording-gifski-quality" type="i">
+      <range min="20" max="100"/>
+      <default>60</default>
+      <summary>Quality setting for the gifski GIF encoder</summary>
+    </key>
+    <key name="interface-show-notification" type="b">
+      <default>true</default>
+      <summary>Show desktop notification after saving</summary>
+    </key>
+    <key name="interface-prefer-dark-theme" type="b">
+      <default>true</default>
+      <summary>Prefer dark theme</summary>
+    </key>
+    <key name="interface-open-editor-after-recording" type="b">
+      <default>true</default>
+      <summary>Open the editor after recording instead of saving immediately</summary>
+    </key>
+    <key name="persist-save-folder" type="s">
+      <default>""</default>
+      <summary>Path where the last recording was saved</summary>
+    </key>
+  </schema>
+</schemalist>

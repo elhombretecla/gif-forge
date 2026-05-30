@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3-gi \
+            gir1.2-glib-2.0 \
+            gir1.2-gtk-4.0 \
+            gir1.2-adw-1 \
+            ffmpeg \
+            desktop-file-utils \
+            appstream
+
+      - name: Install test dependencies
+        run: python3 -m pip install --user pytest
+
+      - name: Run unit tests
+        run: python3 -m pytest tests_py -q
+
+      - name: Validate desktop entry
+        run: desktop-file-validate data/io.github.elhombretecla.GifForge.desktop
+
+      - name: Validate AppStream metainfo
+        run: appstreamcli validate --no-net data/io.github.elhombretecla.GifForge.metainfo.xml
+
+      - name: Validate GSettings schema
+        run: |
+          tmp=$(mktemp -d)
+          cp data/io.github.elhombretecla.GifForge.gschema.xml "$tmp/"
+          glib-compile-schemas "$tmp"
+
+  e2e-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 \
+            ffmpeg xvfb
+
+      - name: Run end-to-end UI drivers under Xvfb
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          for driver in tests_py/_e2e_editor.py tests_py/_e2e_export.py tests_py/_e2e_project.py; do
+            echo "== $driver =="
+            xvfb-run -a python3 "$driver"
+          done

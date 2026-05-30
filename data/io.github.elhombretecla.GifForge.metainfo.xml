@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.elhombretecla.GifForge</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>GIF Forge</name>
+  <summary>Record your screen and edit it into an optimized GIF or video</summary>
+
+  <description>
+    <p>
+      GIF Forge is a modern Linux screen-capture studio. Record a region,
+      window or screen on Wayland or X11, then refine the result on a timeline —
+      trim, cut, reorder, retime and crop — before exporting an optimized GIF,
+      WebM video or APNG.
+    </p>
+    <p>It keeps recording simple while adding powerful frame-by-frame editing:</p>
+    <ul>
+      <li>Record a region, window or the whole screen</li>
+      <li>Native Wayland capture via the screen-cast portal, plus X11</li>
+      <li>Frame-by-frame timeline: delete, duplicate, reorder and reverse frames</li>
+      <li>Remove duplicate frames and reduce frame count</li>
+      <li>Adjust per-frame delay and change playback speed</li>
+      <li>Trim to a selection and crop the frame</li>
+      <li>Undo and redo every edit</li>
+      <li>Export optimized GIF, WebM or APNG</li>
+      <li>Save and reopen editable projects, with crash recovery</li>
+      <li>HiDPI aware, light and dark themes</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">io.github.elhombretecla.GifForge.desktop</launchable>
+
+  <provides>
+    <binary>gif-forge</binary>
+  </provides>
+
+  <categories>
+    <category>Graphics</category>
+    <category>AudioVideo</category>
+  </categories>
+
+  <keywords>
+    <keyword>screencast</keyword>
+    <keyword>screen recorder</keyword>
+    <keyword>GIF</keyword>
+    <keyword>editor</keyword>
+  </keywords>
+
+  <content_rating type="oars-1.1"/>
+
+  <developer id="io.github.elhombretecla">
+    <name>GIF Forge contributors</name>
+  </developer>
+
+  <url type="homepage">https://github.com/elhombretecla/gif-forge</url>
+  <url type="bugtracker">https://github.com/elhombretecla/gif-forge/issues</url>
+
+  <releases>
+    <release version="0.1.0" date="2026-05-29">
+      <description>
+        <p>First development preview: Wayland-first recorder, timeline editor
+        with undo/redo, optimized GIF/WebM/APNG export, and editable projects
+        with crash recovery.</p>
+      </description>
+    </release>
+  </releases>
+</component>

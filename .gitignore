@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build output
+/build/
+/builddir/
+/dist/
+
+# Flatpak build directories
+.flatpak-builder/
+/build-aux/flatpak/.flatpak-builder/
+*.flatpak
+
+# Compiled GSettings schema
+data/gschemas.compiled
+
+# Editors / OS
+/.vscode/
+/.idea/
+*~
+.DS_Store

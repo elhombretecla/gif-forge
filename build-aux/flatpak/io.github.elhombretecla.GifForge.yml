@@ -1,0 +1,138 @@
+# Flatpak manifest for GIF Forge (Python/GTK4).
+#
+# Modernizes Peek's manifest: current GNOME runtime, native Wayland capture via
+# the ScreenCast portal + PipeWire, bundled ffmpeg + gifski. ffmpeg is built
+# with exactly the codecs/filters GIF Forge invokes (note the `concat`
+# demuxer, required by the edited-timeline exporter).
+#
+# Build locally with:
+#   flatpak-builder --user --install --force-clean build \
+#     build-aux/flatpak/io.github.elhombretecla.GifForge.yml
+app-id: io.github.elhombretecla.GifForge
+runtime: org.gnome.Platform
+runtime-version: '48'
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: gif-forge
+
+finish-args:
+  # Native Wayland + fallback X11 rendering.
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  # Screen capture: ScreenCast portal hands us a PipeWire fd; pipewiresrc uses it.
+  - --talk-name=org.freedesktop.portal.ScreenCast
+  - --socket=pipewire
+  # Notifications + saving recordings.
+  - --talk-name=org.freedesktop.portal.Notification
+  - --filesystem=xdg-pictures
+  - --filesystem=xdg-videos
+  # Find the bundled ffmpeg/gifski libraries.
+  - --env=LD_LIBRARY_PATH=/app/lib
+  - --metadata=X-DConf=migrate-path=/io/github/elhombretecla/GifForge/
+
+build-options:
+  cflags: -O2 -g -fstack-protector-strong -D_FORTIFY_SOURCE=2
+  cxxflags: -O2 -g -fstack-protector-strong -D_FORTIFY_SOURCE=2
+  ldflags: -fstack-protector-strong -Wl,-z,relro,-z,now
+  append-path: /usr/lib/sdk/rust-stable/bin
+
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /share/gtk-doc
+  - "*.la"
+
+modules:
+  - name: ffmpeg
+    config-opts:
+      - --disable-debug
+      - --disable-static
+      - --enable-gpl
+      - --enable-libvpx
+      - --enable-libx264
+      - --enable-shared
+      - --enable-libxcb
+      - --enable-libxcb-xfixes
+      - --disable-libxcb-shape
+      - --disable-ffplay
+      - --disable-doc
+      - --disable-everything
+      - --enable-bsf=vp9_superframe
+      - --enable-decoder=libvpx_vp9
+      - --enable-decoder=png
+      - --enable-decoder=rawvideo
+      - --enable-encoder=apng
+      - --enable-encoder=ffvhuff
+      - --enable-encoder=gif
+      - --enable-encoder=libvpx_vp9
+      - --enable-encoder=libx264
+      - --enable-encoder=png
+      - --enable-demuxer=concat
+      - --enable-demuxer=image2
+      - --enable-demuxer=matroska
+      - --enable-muxer=apng
+      - --enable-muxer=gif
+      - --enable-muxer=image2
+      - --enable-muxer=webm
+      - --enable-filter=crop
+      - --enable-filter=format
+      - --enable-filter=fps
+      - --enable-filter=palettegen
+      - --enable-filter=paletteuse
+      - --enable-filter=scale
+      - --enable-protocol=file
+      - --enable-indev=xcbgrab
+    sources:
+      # Verified source/checksum carried over from Peek's manifest. 4.4.1 already
+      # provides the concat demuxer + format filter we rely on. TODO before a
+      # real Flathub submission: bump to a current ffmpeg release and update the
+      # sha256 to the matching published checksum.
+      - type: archive
+        url: https://ffmpeg.org/releases/ffmpeg-4.4.1.tar.xz
+        sha256: eadbad9e9ab30b25f5520fbfde99fae4a92a1ae3c0257a8d68569a4651e30e02
+    modules:
+      - name: yasm
+        cleanup:
+          - "*"
+        sources:
+          - type: archive
+            url: http://www.tortall.net/projects/yasm/releases/yasm-1.3.0.tar.gz
+            sha256: 3dce6601b495f5b3d45b59f7d2492a340ee7e84b5beca17e48f862502bd5603f
+      - name: libx264
+        config-opts:
+          - --enable-pic
+          - --enable-shared
+        sources:
+          - type: git
+            url: https://code.videolan.org/videolan/x264.git
+            commit: baee400fa9ced6f5481a728138fed6e867b0ff7f
+        cleanup:
+          - /bin/x264
+
+  - name: gifski
+    buildsystem: simple
+    build-options:
+      build-args:
+        - --share=network
+    skip-arches:
+      - aarch64
+      - arm
+    sources:
+      - type: archive
+        url: https://github.com/ImageOptim/gifski/archive/refs/tags/1.8.1.tar.gz
+        sha256: 9c06e0124a5bde4d70fe44cc8be52ffc9b9099548fc34cac1db43c4a6ff8783c
+    build-commands:
+      - cargo build --release --features=openmp --verbose
+      - install -Dm755 target/release/gifski /app/bin/gifski
+
+  - name: gif-forge
+    buildsystem: simple
+    build-commands:
+      - pip3 install --prefix=${FLATPAK_DEST} --no-deps --no-build-isolation .
+      - sh build-aux/flatpak/install-data.sh ${FLATPAK_DEST}
+    sources:
+      - type: dir
+        path: ../..

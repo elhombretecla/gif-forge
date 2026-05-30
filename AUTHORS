@@ -1,0 +1,23 @@
+GIF Forge
+===========
+
+Development
+
+  Juan de la Cruz García <delacruzgarciajuan@gmail.com>
+
+
+Based on Peek
+=============
+
+GIF Forge began as a ground-up Python/GTK4 rewrite of Peek, the screen
+recorder by Philipp Wolfer (https://github.com/phw/peek). It builds on parts of
+Peek's packaging and ffmpeg/gifski encoding knowledge under the
+GPL-3.0-or-later license.
+
+Original Peek development
+
+  Philipp Wolfer <ph.wolfer@gmail.com>
+  Alessandro Toia <gort818@gmail.com>
+
+Peek was translated by many contributors; see the original project's AUTHORS
+file at https://github.com/phw/peek for the full list of translators.
