@@ -10,12 +10,13 @@ Replaces Peek's ``application.vala`` / ``main.vala``. Notably it does NOT force
 from __future__ import annotations
 
 import logging
+import os
 
 import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gio, Gtk  # noqa: E402
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
 
 from .. import APP_ID, APP_NAME, __version__  # noqa: E402
 from ..project import SessionCache, list_recoverable, load_project  # noqa: E402
@@ -139,7 +140,37 @@ class GifForgeApplication(Adw.Application):
             license_type=Gtk.License.GPL_3_0,
             comments="Record and edit screen captures as GIF, video or APNG.",
         )
+
+        # Load the app logo PNG directly so it shows even when running from
+        # source, where the icon isn't installed in the system icon theme and
+        # `logo_icon_name` would otherwise fall back to a generic placeholder.
+        logo = self._load_logo_texture()
+        if logo is not None:
+            about.set_logo(logo)
+
         about.present()
+
+    @staticmethod
+    def _load_logo_texture():
+        """Return a GdkTexture of the app logo, or None if it can't be found."""
+        # Repo root relative to this module: gifforge/ui/application.py -> ../../
+        repo_root = os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        )
+        candidates = []
+        for size in ("512x512", "256x256", "128x128", "64x64", "48x48"):
+            candidates.append(
+                os.path.join(repo_root, "data", "icons", size, f"{APP_ID}.png")
+            )
+            # Installed / Flatpak hicolor location.
+            candidates.append(f"/app/share/icons/hicolor/{size}/apps/{APP_ID}.png")
+        for path in candidates:
+            if os.path.exists(path):
+                try:
+                    return Gdk.Texture.new_from_filename(path)
+                except GLib.Error:
+                    log.warning("Failed to load logo from %s", path)
+        return None
 
     def _on_preferences(self, *_args) -> None:
         settings = get_settings()
