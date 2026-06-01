@@ -70,6 +70,7 @@ jobs:
             gir1.2-gstreamer-1.0 gir1.2-gst-plugins-base-1.0 \
             gstreamer1.0-pipewire gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
             libgirepository-1.0-1 librsvg2-common \
+            libgtk-4-dev libadwaita-1-dev pkg-config \
             wget file desktop-file-utils
 
       - name: Ensure setuptools>=77 (so the wheel keeps its real name/metadata)
