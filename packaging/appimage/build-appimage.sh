@@ -31,7 +31,7 @@ mkdir -p "$USR/bin" "$USR/lib" dist
 #   sudo apt-get install -y python3 python3-pip python3-gi python3-gi-cairo \
 #     gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-gdkpixbuf-2.0 \
 #     gstreamer1.0-pipewire gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
-#     libgirepository-1.0-1 wget file desktop-file-utils
+#     libgirepository-1.0-1 gettext wget file desktop-file-utils
 
 PYVER="$(python3 -c 'import sys; print("python%d.%d" % sys.version_info[:2])')"
 PYLIB="/usr/lib/$PYVER"

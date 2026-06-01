@@ -17,64 +17,95 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk  # noqa: E402
 
+from ..i18n import SUPPORTED_LANGUAGES, _  # noqa: E402
 from ..models import OutputFormat  # noqa: E402
 from ..settings import Settings  # noqa: E402
+
+# Native language names, shown in their own language so users recognise them.
+_LANGUAGE_NAMES = {
+    "en": "English",
+    "es": "Español",
+    "fr": "Français",
+    "de": "Deutsch",
+    "pt": "Português",
+}
 
 
 class PreferencesWindow(Adw.PreferencesWindow):
     def __init__(self, settings: Settings, **kwargs) -> None:
         super().__init__(**kwargs)
         self._settings = settings
-        self.set_title("Preferences")
+        self.set_title(_("Preferences"))
         self.set_search_enabled(False)
         self._build()
 
     def _build(self) -> None:
-        page = Adw.PreferencesPage(title="Recording", icon_name="camera-video-symbolic")
+        page = Adw.PreferencesPage(title=_("Recording"), icon_name="camera-video-symbolic")
 
-        recording = Adw.PreferencesGroup(title="Recording")
+        recording = Adw.PreferencesGroup(title=_("Recording"))
         recording.add(self._format_row())
         recording.add(
-            self._spin_row("Frame rate", "recording-framerate", 1, 60, 1, "fps")
+            self._spin_row(_("Frame rate"), "recording-framerate", 1, 60, 1, "fps")
         )
         recording.add(
-            self._spin_row("Downsample", "recording-downsample", 1, 4, 1, "×")
+            self._spin_row(_("Downsample"), "recording-downsample", 1, 4, 1, "×")
         )
-        recording.add(self._switch_row("Capture mouse cursor", "recording-capture-mouse"))
-        recording.add(self._switch_row("Capture sound (WebM only)", "recording-capture-sound"))
+        recording.add(self._switch_row(_("Capture mouse cursor"), "recording-capture-mouse"))
+        recording.add(self._switch_row(_("Capture sound (WebM only)"), "recording-capture-sound"))
         recording.add(
-            self._spin_row("Start delay", "recording-start-delay", 0, 60, 1, "s")
+            self._spin_row(_("Start delay"), "recording-start-delay", 0, 60, 1, "s")
         )
         page.add(recording)
 
         quality = Adw.PreferencesGroup(
-            title="GIF quality",
-            description="gifski produces higher-quality GIFs when installed.",
+            title=_("GIF quality"),
+            description=_("gifski produces higher-quality GIFs when installed."),
         )
-        quality.add(self._switch_row("Use gifski encoder", "recording-gifski-enabled"))
+        quality.add(self._switch_row(_("Use gifski encoder"), "recording-gifski-enabled"))
         quality.add(
-            self._spin_row("gifski quality", "recording-gifski-quality", 20, 100, 5, "")
+            self._spin_row(_("gifski quality"), "recording-gifski-quality", 20, 100, 5, "")
         )
         page.add(quality)
 
-        interface = Adw.PreferencesGroup(title="Interface")
+        interface = Adw.PreferencesGroup(title=_("Interface"))
+        interface.add(self._language_row())
         interface.add(
-            self._switch_row("Open editor after recording", "interface-open-editor-after-recording")
+            self._switch_row(_("Open editor after recording"), "interface-open-editor-after-recording")
         )
         interface.add(
-            self._switch_row("Show notification after saving", "interface-show-notification")
+            self._switch_row(_("Show notification after saving"), "interface-show-notification")
         )
-        interface.add(self._switch_row("Prefer dark theme", "interface-prefer-dark-theme"))
+        interface.add(self._switch_row(_("Prefer dark theme"), "interface-prefer-dark-theme"))
         page.add(interface)
 
         self.add(page)
 
     # --- row builders --------------------------------------------------------
 
+    def _language_row(self) -> Adw.ComboRow:
+        langs = SUPPORTED_LANGUAGES
+        model = Gtk.StringList.new([_LANGUAGE_NAMES.get(c, c) for c in langs])
+        row = Adw.ComboRow(
+            title=_("Language"),
+            subtitle=_("Applied after restarting GIF Forge"),
+            model=model,
+        )
+        current = self._settings.get("interface-language")
+        row.set_selected(langs.index(current) if current in langs else 0)
+
+        def on_selected(combo, _param):
+            new = langs[combo.get_selected()]
+            if new != self._settings.get("interface-language"):
+                self._settings.set("interface-language", new)
+                self.add_toast(Adw.Toast.new(_("Restart GIF Forge to change the language")))
+
+        row.connect("notify::selected", on_selected)
+        return row
+
     def _format_row(self) -> Adw.ComboRow:
         formats = list(OutputFormat)
         model = Gtk.StringList.new([f.value.upper() for f in formats])
-        row = Adw.ComboRow(title="Output format", model=model)
+        row = Adw.ComboRow(title=_("Output format"), model=model)
         current = self._settings.get("recording-output-format")
         row.set_selected(
             next((i for i, f in enumerate(formats) if f.value == current), 0)

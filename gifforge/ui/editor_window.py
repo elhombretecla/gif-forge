@@ -37,6 +37,7 @@ from ..editor import (  # noqa: E402
     TrimFrames,
 )
 from ..frames.model import FrameList  # noqa: E402
+from ..i18n import _  # noqa: E402
 from ..models import OutputFormat  # noqa: E402
 from ..project import (  # noqa: E402
     PROJECT_SUFFIX,
@@ -62,7 +63,7 @@ class EditorWindow(Adw.ApplicationWindow):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self.set_title("Editor — GIF Forge")
+        self.set_title(_("Editor") + " — GIF Forge")
         self.set_default_size(720, 560)
 
         self._frames: FrameList = FrameList()
@@ -94,17 +95,15 @@ class EditorWindow(Adw.ApplicationWindow):
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
 
         header = Adw.HeaderBar()
-        self._export_button = Gtk.Button(label="Export…")
+        self._export_button = Gtk.Button(label=_("Export…"))
         self._export_button.add_css_class("suggested-action")
         self._export_button.set_sensitive(False)
-        self._export_button.set_tooltip_text("Export the edited timeline")
+        self._export_button.set_tooltip_text(_("Export the edited timeline"))
         self._export_button.connect("clicked", lambda *_: self.open_export_dialog())
         header.pack_end(self._export_button)
 
         menu_button = Gtk.MenuButton(icon_name="open-menu-symbolic")
-        menu_button.set_menu_model(
-            Gtk.Builder.new_from_string(_EDIT_MENU_XML, -1).get_object("edit-menu")
-        )
+        menu_button.set_menu_model(self._build_menu())
         header.pack_end(menu_button)
         root.append(header)
 
@@ -119,6 +118,39 @@ class EditorWindow(Adw.ApplicationWindow):
 
         root.append(self._build_bottom_bar())
         self.set_content(root)
+
+    def _build_menu(self) -> Gio.Menu:
+        menu = Gio.Menu()
+
+        projects = Gio.Menu()
+        projects.append(_("Open project…"), "win.open-project")
+        projects.append(_("Save project…"), "win.save-project")
+        menu.append_section(None, projects)
+
+        frames = Gio.Menu()
+        frames.append(_("Delete selected"), "win.delete")
+        frames.append(_("Duplicate selected"), "win.duplicate")
+        frames.append(_("Trim to selection"), "win.trim")
+        menu.append_section(None, frames)
+
+        captions = Gio.Menu()
+        captions.append(_("Add caption…"), "win.add-caption")
+        menu.append_section(None, captions)
+
+        timing = Gio.Menu()
+        timing.append(_("Reverse"), "win.reverse")
+        timing.append(_("Remove duplicate frames"), "win.dedup")
+        timing.append(_("Reduce frames (keep every 2nd)"), "win.reduce")
+        menu.append_section(None, timing)
+
+        speed = Gio.Menu()
+        speed.append(_("Double speed"), "win.speed-up")
+        speed.append(_("Half speed"), "win.speed-down")
+        speed.append(_("Increase delay"), "win.delay-up")
+        speed.append(_("Decrease delay"), "win.delay-down")
+        menu.append_section(None, speed)
+
+        return menu
 
     def _install_css(self) -> None:
         css = b"""
@@ -171,43 +203,43 @@ class EditorWindow(Adw.ApplicationWindow):
             bar.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
 
         # Action stack.
-        self._undo_button = self._tool_button("edit-undo-symbolic", "Undo", self.undo)
-        self._redo_button = self._tool_button("edit-redo-symbolic", "Redo", self.redo)
-        reset_btn = self._tool_button("edit-clear-all-symbolic", "Reset", self.reset)
-        bar.append(self._group("Action", [self._undo_button, self._redo_button, reset_btn]))
+        self._undo_button = self._tool_button("edit-undo-symbolic", _("Undo"), self.undo)
+        self._redo_button = self._tool_button("edit-redo-symbolic", _("Redo"), self.redo)
+        reset_btn = self._tool_button("edit-clear-all-symbolic", _("Reset"), self.reset)
+        bar.append(self._group(_("Action"), [self._undo_button, self._redo_button, reset_btn]))
         sep()
 
         # Clipboard.
-        bar.append(self._group("Clipboard", [
-            self._tool_button("edit-copy-symbolic", "Copy", self.copy_frames),
-            self._tool_button("edit-cut-symbolic", "Cut", self.cut_frames),
-            self._tool_button("edit-paste-symbolic", "Paste", self.paste_frames),
+        bar.append(self._group(_("Clipboard"), [
+            self._tool_button("edit-copy-symbolic", _("Copy"), self.copy_frames),
+            self._tool_button("edit-cut-symbolic", _("Cut"), self.cut_frames),
+            self._tool_button("edit-paste-symbolic", _("Paste"), self.paste_frames),
         ]))
         sep()
 
         # Frame operations.
-        bar.append(self._group("Frames", [
-            self._tool_button("edit-delete-symbolic", "Delete", self.delete_selected),
-            self._tool_button("list-add-symbolic", "Duplicate", self.duplicate_selected),
-            self._tool_button("document-edit-symbolic", "Delay…", self.set_delay_dialog),
+        bar.append(self._group(_("Frames"), [
+            self._tool_button("edit-delete-symbolic", _("Delete"), self.delete_selected),
+            self._tool_button("list-add-symbolic", _("Duplicate"), self.duplicate_selected),
+            self._tool_button("document-edit-symbolic", _("Delay…"), self.set_delay_dialog),
         ]))
         sep()
 
         # Selection.
-        bar.append(self._group("Select", [
-            self._tool_button("edit-select-all-symbolic", "All", self.select_all),
-            self._tool_button("object-flip-horizontal-symbolic", "Inverse", self.invert_selection),
-            self._tool_button("edit-clear-symbolic", "None", self.deselect),
-            self._tool_button("go-jump-symbolic", "Go to…", self.go_to_dialog),
+        bar.append(self._group(_("Select"), [
+            self._tool_button("edit-select-all-symbolic", _("All"), self.select_all),
+            self._tool_button("object-flip-horizontal-symbolic", _("Inverse"), self.invert_selection),
+            self._tool_button("edit-clear-symbolic", _("None"), self.deselect),
+            self._tool_button("go-jump-symbolic", _("Go to…"), self.go_to_dialog),
         ]))
         sep()
 
         # Zoom.
-        self._zoom_fit_button = self._tool_button("zoom-fit-best-symbolic", "Fit", None, toggle=True)
+        self._zoom_fit_button = self._tool_button("zoom-fit-best-symbolic", _("Fit"), None, toggle=True)
         self._zoom_fit_button.set_active(True)
         self._zoom_fit_button.connect("toggled", self._on_zoom_fit_toggled)
         zoom_100 = self._tool_button("zoom-original-symbolic", "100%", self._zoom_100)
-        bar.append(self._group("Zoom", [self._zoom_fit_button, zoom_100]))
+        bar.append(self._group(_("Zoom"), [self._zoom_fit_button, zoom_100]))
 
         scroller = Gtk.ScrolledWindow()
         scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.NEVER)
@@ -230,21 +262,21 @@ class EditorWindow(Adw.ApplicationWindow):
             bar.append(b)
             return b
 
-        nav("go-first-symbolic", "First frame", self.go_first)
-        nav("go-previous-symbolic", "Previous frame", self.go_previous)
-        self._play_button = nav("media-playback-start-symbolic", "Play / Pause", self.toggle_play)
-        nav("go-next-symbolic", "Next frame", self.go_next)
-        nav("go-last-symbolic", "Last frame", self.go_last)
+        nav("go-first-symbolic", _("First frame"), self.go_first)
+        nav("go-previous-symbolic", _("Previous frame"), self.go_previous)
+        self._play_button = nav("media-playback-start-symbolic", _("Play / Pause"), self.toggle_play)
+        nav("go-next-symbolic", _("Next frame"), self.go_next)
+        nav("go-last-symbolic", _("Last frame"), self.go_last)
 
         self._loop_button = Gtk.ToggleButton(icon_name="media-playlist-repeat-symbolic")
         self._loop_button.add_css_class("flat")
-        self._loop_button.set_tooltip_text("Loop playback")
+        self._loop_button.set_tooltip_text(_("Loop playback"))
         self._loop_button.set_active(self._loop)
         self._loop_button.connect("toggled", lambda b: setattr(self, "_loop", b.get_active()))
         bar.append(self._loop_button)
 
         bar.append(Gtk.Box(hexpand=True))
-        self._status = Gtk.Label(label="No frames")
+        self._status = Gtk.Label(label=_("No frames"))
         self._status.add_css_class("dim-label")
         bar.append(self._status)
         return bar
@@ -439,7 +471,7 @@ class EditorWindow(Adw.ApplicationWindow):
         if not indices:
             return
         if len(indices) >= len(self._frames):
-            self._status.set_label("Can't delete every frame")
+            self._status.set_label(_("Can't delete every frame"))
             return
         self._execute(DeleteFrames(indices), select_index=min(indices))
 
@@ -485,12 +517,14 @@ class EditorWindow(Adw.ApplicationWindow):
         if not indices:
             return
         self._clipboard = [self._frames[i].clone() for i in indices]
-        self._status.set_label(f"Copied {len(self._clipboard)} frame(s)")
+        self._status.set_label(
+            _("Copied {count} frame(s)").format(count=len(self._clipboard))
+        )
 
     def cut_frames(self) -> None:
         indices = self._selected_indices()
         if not indices or len(indices) >= len(self._frames):
-            self._status.set_label("Can't cut every frame")
+            self._status.set_label(_("Can't cut every frame"))
             return
         self._clipboard = [self._frames[i].clone() for i in indices]
         self._execute(DeleteFrames(indices), select_index=min(indices))
@@ -516,18 +550,18 @@ class EditorWindow(Adw.ApplicationWindow):
         n = len(self._frames)
         if n == 0:
             return
-        dialog = Gtk.Window(transient_for=self, modal=True, title="Go to frame")
+        dialog = Gtk.Window(transient_for=self, modal=True, title=_("Go to frame"))
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12,
                       margin_top=16, margin_bottom=16, margin_start=16, margin_end=16)
         spin = Gtk.SpinButton.new_with_range(0, n - 1, 1)
         spin.set_value(max(0, self._current))
-        box.append(Gtk.Label(label=f"Frame number (0–{n - 1}):", xalign=0))
+        box.append(Gtk.Label(label=_("Frame number (0–{max}):").format(max=n - 1), xalign=0))
         box.append(spin)
         buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
                           halign=Gtk.Align.END)
-        cancel = Gtk.Button(label="Cancel")
+        cancel = Gtk.Button(label=_("Cancel"))
         cancel.connect("clicked", lambda *_: dialog.close())
-        go = Gtk.Button(label="Go")
+        go = Gtk.Button(label=_("Go"))
         go.add_css_class("suggested-action")
 
         def commit(*_a):
@@ -549,18 +583,21 @@ class EditorWindow(Adw.ApplicationWindow):
         if not indices:
             return
         current_delay = self._frames[indices[0]].delay_ms
-        dialog = Gtk.Window(transient_for=self, modal=True, title="Frame delay")
+        dialog = Gtk.Window(transient_for=self, modal=True, title=_("Frame delay"))
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12,
                       margin_top=16, margin_bottom=16, margin_start=16, margin_end=16)
         spin = Gtk.SpinButton.new_with_range(1, 60000, 1)
         spin.set_value(current_delay)
-        box.append(Gtk.Label(label=f"Delay for {len(indices)} frame(s), in ms:", xalign=0))
+        box.append(Gtk.Label(
+            label=_("Delay for {count} frame(s), in ms:").format(count=len(indices)),
+            xalign=0,
+        ))
         box.append(spin)
         buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
                           halign=Gtk.Align.END)
-        cancel = Gtk.Button(label="Cancel")
+        cancel = Gtk.Button(label=_("Cancel"))
         cancel.connect("clicked", lambda *_: dialog.close())
-        apply_btn = Gtk.Button(label="Apply")
+        apply_btn = Gtk.Button(label=_("Apply"))
         apply_btn.add_css_class("suggested-action")
 
         def commit(*_a):
@@ -580,21 +617,21 @@ class EditorWindow(Adw.ApplicationWindow):
     def add_caption_dialog(self) -> None:
         if not len(self._frames):
             return
-        dialog = Gtk.Window(transient_for=self, modal=True, title="Add caption")
+        dialog = Gtk.Window(transient_for=self, modal=True, title=_("Add caption"))
         dialog.set_default_size(320, -1)
         box = Gtk.Box(
             orientation=Gtk.Orientation.VERTICAL, spacing=12,
             margin_top=16, margin_bottom=16, margin_start=16, margin_end=16,
         )
-        entry = Gtk.Entry(placeholder_text="Caption text")
+        entry = Gtk.Entry(placeholder_text=_("Caption text"))
         entry.set_hexpand(True)
         box.append(entry)
 
         buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
                           halign=Gtk.Align.END)
-        cancel = Gtk.Button(label="Cancel")
+        cancel = Gtk.Button(label=_("Cancel"))
         cancel.connect("clicked", lambda *_: dialog.close())
-        add = Gtk.Button(label="Add")
+        add = Gtk.Button(label=_("Add"))
         add.add_css_class("suggested-action")
 
         def commit(*_a):
@@ -619,7 +656,7 @@ class EditorWindow(Adw.ApplicationWindow):
         else:
             start, end = 0, -1
         self._overlays.append(TextOverlay(start=start, end=end, text=text))
-        self._status.set_label(f"Caption added: “{text}”")
+        self._status.set_label(_("Caption added: “{text}”").format(text=text))
         self._schedule_autosave()
 
     # --- projects & autosave -------------------------------------------------
@@ -639,10 +676,10 @@ class EditorWindow(Adw.ApplicationWindow):
             self._write_project(self._project_path)
             return
         chooser = Gtk.FileChooserNative(
-            title="Save project",
+            title=_("Save project"),
             transient_for=self,
             action=Gtk.FileChooserAction.SAVE,
-            accept_label="_Save",
+            accept_label=_("_Save"),
         )
         chooser.set_current_name(f"Untitled{PROJECT_SUFFIX}")
         chooser.connect("response", self._on_save_project_response)
@@ -666,14 +703,14 @@ class EditorWindow(Adw.ApplicationWindow):
         self._project_path = doc.path
         self._recents.add(doc.path)
         self.set_title(f"{doc.title} — GIF Forge")
-        self._status.set_label(f"Saved project to {doc.path}")
+        self._status.set_label(_("Saved project to {path}").format(path=doc.path))
 
     def open_project(self) -> None:
         chooser = Gtk.FileChooserNative(
-            title="Open project",
+            title=_("Open project"),
             transient_for=self,
             action=Gtk.FileChooserAction.OPEN,
-            accept_label="_Open",
+            accept_label=_("_Open"),
         )
         chooser.connect("response", self._on_open_project_response)
         self._open_chooser = chooser
@@ -694,7 +731,7 @@ class EditorWindow(Adw.ApplicationWindow):
             document = load_project(_Path(path), cache)
         except Exception as exc:  # noqa: BLE001
             cache.cleanup()
-            self._show_error("Could not open project", str(exc))
+            self._show_error(_("Could not open project"), str(exc))
             return
         self._adopt_cache(cache)
         self.load_document(document, cache)
@@ -774,80 +811,12 @@ class EditorWindow(Adw.ApplicationWindow):
     def _update_status(self) -> None:
         n = len(self._frames)
         if n == 0:
-            self._status.set_label("No frames")
+            self._status.set_label(_("No frames"))
             return
         selected = len(self._strip.get_selected_indices())
         total_s = self._frames.total_duration_ms / 1000
         self._status.set_label(
-            f"{n} frames · {selected} selected · #{self._current} · {total_s:.1f}s"
+            _("{count} frames · {selected} selected · #{current} · {seconds:.1f}s").format(
+                count=n, selected=selected, current=self._current, seconds=total_s
+            )
         )
-
-
-_EDIT_MENU_XML = """
-<interface>
-  <menu id="edit-menu">
-    <section>
-      <item>
-        <attribute name="label">Open project…</attribute>
-        <attribute name="action">win.open-project</attribute>
-      </item>
-      <item>
-        <attribute name="label">Save project…</attribute>
-        <attribute name="action">win.save-project</attribute>
-      </item>
-    </section>
-    <section>
-      <item>
-        <attribute name="label">Delete selected</attribute>
-        <attribute name="action">win.delete</attribute>
-      </item>
-      <item>
-        <attribute name="label">Duplicate selected</attribute>
-        <attribute name="action">win.duplicate</attribute>
-      </item>
-      <item>
-        <attribute name="label">Trim to selection</attribute>
-        <attribute name="action">win.trim</attribute>
-      </item>
-    </section>
-    <section>
-      <item>
-        <attribute name="label">Add caption…</attribute>
-        <attribute name="action">win.add-caption</attribute>
-      </item>
-    </section>
-    <section>
-      <item>
-        <attribute name="label">Reverse</attribute>
-        <attribute name="action">win.reverse</attribute>
-      </item>
-      <item>
-        <attribute name="label">Remove duplicate frames</attribute>
-        <attribute name="action">win.dedup</attribute>
-      </item>
-      <item>
-        <attribute name="label">Reduce frames (keep every 2nd)</attribute>
-        <attribute name="action">win.reduce</attribute>
-      </item>
-    </section>
-    <section>
-      <item>
-        <attribute name="label">Double speed</attribute>
-        <attribute name="action">win.speed-up</attribute>
-      </item>
-      <item>
-        <attribute name="label">Half speed</attribute>
-        <attribute name="action">win.speed-down</attribute>
-      </item>
-      <item>
-        <attribute name="label">Increase delay</attribute>
-        <attribute name="action">win.delay-up</attribute>
-      </item>
-      <item>
-        <attribute name="label">Decrease delay</attribute>
-        <attribute name="action">win.delay-down</attribute>
-      </item>
-    </section>
-  </menu>
-</interface>
-"""

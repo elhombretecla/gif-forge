@@ -10,6 +10,7 @@ pkgbase = gif-forge
 	makedepends = python-setuptools
 	makedepends = python-wheel
 	makedepends = glib2
+	makedepends = gettext
 	depends = python
 	depends = python-gobject
 	depends = python-cairo

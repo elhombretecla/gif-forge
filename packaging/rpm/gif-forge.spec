@@ -13,6 +13,7 @@ BuildRequires:  python3-devel
 BuildRequires:  python3-setuptools
 BuildRequires:  pyproject-rpm-macros
 BuildRequires:  glib2-devel
+BuildRequires:  gettext
 BuildRequires:  desktop-file-utils
 BuildRequires:  libappstream-glib
 
@@ -48,13 +49,15 @@ GTK4 and Libadwaita and uses ffmpeg (and optionally gifski) for encoding.
 sh build-aux/flatpak/install-data.sh %{buildroot}%{_prefix}
 # Do not ship the compiled schema cache; the glib2 file trigger regenerates it.
 rm -f %{buildroot}%{_datadir}/glib-2.0/schemas/gschemas.compiled
+# Collect the translation catalogues (install-data.sh compiled them above).
+%find_lang gif-forge
 
 %check
 desktop-file-validate %{buildroot}%{_datadir}/applications/%{appid}.desktop
 appstream-util validate-relax --nonet \
     %{buildroot}%{_datadir}/metainfo/%{appid}.metainfo.xml
 
-%files
+%files -f gif-forge.lang
 %license LICENSE
 %doc README.md
 %{python3_sitelib}/gifforge/

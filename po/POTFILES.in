@@ -1,0 +1,6 @@
+# Source files with translatable strings (wrapped in _()).
+gifforge/ui/application.py
+gifforge/ui/editor_window.py
+gifforge/ui/export_dialog.py
+gifforge/ui/preferences_window.py
+gifforge/ui/recorder_window.py
