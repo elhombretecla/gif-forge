@@ -11,3 +11,8 @@ export PYBUILD_NAME=gifforge
 
 %:
 	dh $@ --with python3 --buildsystem=pybuild
+
+# The test suite imports GTK/GStreamer and needs a display + ffmpeg; it runs in
+# CI (ci.yml), not at package build time.
+override_dh_auto_test:
+
