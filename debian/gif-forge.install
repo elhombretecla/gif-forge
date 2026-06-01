@@ -1,0 +1,8 @@
+data/io.github.elhombretecla.GifForge.desktop          usr/share/applications/
+data/io.github.elhombretecla.GifForge.metainfo.xml     usr/share/metainfo/
+data/io.github.elhombretecla.GifForge.gschema.xml      usr/share/glib-2.0/schemas/
+data/icons/512x512/io.github.elhombretecla.GifForge.png usr/share/icons/hicolor/512x512/apps/
+data/icons/256x256/io.github.elhombretecla.GifForge.png usr/share/icons/hicolor/256x256/apps/
+data/icons/128x128/io.github.elhombretecla.GifForge.png usr/share/icons/hicolor/128x128/apps/
+data/icons/64x64/io.github.elhombretecla.GifForge.png   usr/share/icons/hicolor/64x64/apps/
+data/icons/48x48/io.github.elhombretecla.GifForge.png   usr/share/icons/hicolor/48x48/apps/

@@ -1,0 +1,18 @@
+#!/usr/bin/make -f
+# Build GIF Forge as a pure-Python package via dh-python/pybuild.
+# pybuild reads pyproject.toml, installs the `gifforge` package into the
+# versioned dist-packages, and generates /usr/bin/gif-forge from the
+# [project.scripts] entry point. The data files (desktop, AppStream, GSettings
+# schema, icons) are installed via debian/gif-forge.install; the GSettings
+# schema is compiled on the user's machine by the dpkg glib-compile-schemas
+# trigger, so we deliberately do NOT ship a precompiled gschemas.compiled.
+
+export PYBUILD_NAME=gifforge
+
+%:
+	dh $@ --with python3 --buildsystem=pybuild
+
+# The test suite imports GTK/GStreamer and needs a display + ffmpeg; it runs in
+# CI (ci.yml), not at package build time.
+override_dh_auto_test:
+

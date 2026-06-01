@@ -1,0 +1,42 @@
+# Maintainer: Juan de la Cruz García <delacruzgarciajuan@gmail.com>
+pkgname=gif-forge
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Modern Linux screen recorder and GIF/video editor (GTK4/Libadwaita)"
+arch=('any')
+url="https://github.com/elhombretecla/gif-forge"
+license=('GPL-3.0-or-later')
+depends=(
+  'python'
+  'python-gobject'
+  'python-cairo'
+  'gtk4'
+  'libadwaita'
+  'gst-plugin-pipewire'
+  'gst-plugins-good'
+  'gst-plugins-bad'
+  'ffmpeg'
+)
+optdepends=(
+  'gifski: higher-quality GIF export'
+  'xdg-desktop-portal-gnome: Wayland screen capture (GNOME)'
+  'xdg-desktop-portal-wlr: Wayland screen capture (wlroots)'
+)
+makedepends=('python-build' 'python-installer' 'python-setuptools' 'python-wheel' 'glib2')
+source=("$pkgname-$pkgver.tar.gz::https://github.com/elhombretecla/gif-forge/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cd "$srcdir/$pkgname-$pkgver"
+  python -m build --wheel --no-isolation
+}
+
+package() {
+  cd "$srcdir/$pkgname-$pkgver"
+  python -m installer --destdir="$pkgdir" dist/*.whl
+
+  # Reuse the shared data installer for the desktop entry, AppStream metainfo,
+  # GSettings schema and icons. It also compiles the schema, which is fine on
+  # Arch (the glib2 install hook recompiles system-wide afterwards).
+  sh build-aux/flatpak/install-data.sh "$pkgdir/usr"
+}

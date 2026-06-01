@@ -1,0 +1,59 @@
+# Alternative AppImage recipe using appimage-builder.
+#
+# NOT used by CI (the supported path is build-appimage.sh + linuxdeploy). Kept as
+# a documented fallback: appimage-builder knows how to assemble a GTK/GStreamer
+# app from .deb packages and rewrites the GI typelib / gdk-pixbuf loader / glib
+# schema caches itself. Run with:
+#   appimage-builder --recipe packaging/appimage/AppImageBuilder.yml
+# on an Ubuntu 22.04 base. See docs/PACKAGING.md for the fragility caveats
+# (size, PipeWire ABI, X11-reliable / Wayland-best-effort).
+version: 1
+
+AppDir:
+  path: ./AppDir
+
+  app_info:
+    id: io.github.elhombretecla.GifForge
+    name: GIF Forge
+    icon: io.github.elhombretecla.GifForge
+    version: !ENV ${APP_VERSION}
+    exec: usr/bin/python3
+    exec_args: "-m gifforge $@"
+
+  apt:
+    arch: amd64
+    sources:
+      - sourceline: 'deb [arch=amd64] http://archive.ubuntu.com/ubuntu jammy main universe'
+        key_url: 'http://keyserver.ubuntu.com/pks/lookup?op=get&search=0x871920D1991BC93C'
+    include:
+      - python3
+      - python3-gi
+      - gir1.2-gtk-4.0
+      - gir1.2-adw-1
+      - gir1.2-gdkpixbuf-2.0
+      - libgtk-4-1
+      - libadwaita-1-0
+      - gstreamer1.0-pipewire
+      - gstreamer1.0-plugins-good
+      - gstreamer1.0-plugins-bad
+      - libpipewire-0.3-0
+
+  files:
+    exclude:
+      - usr/share/man
+      - usr/share/doc/*/README.*
+      - usr/lib/x86_64-linux-gnu/gconv
+
+  # gifforge itself + the data files + ffmpeg/gifski are dropped into AppDir by a
+  # pre-step (see build-appimage.sh steps 3, 6, 7) before appimage-builder runs.
+  runtime:
+    env:
+      PATH: '${APPDIR}/usr/bin:${PATH}'
+      GI_TYPELIB_PATH: '${APPDIR}/usr/lib/x86_64-linux-gnu/girepository-1.0'
+      GST_PLUGIN_SYSTEM_PATH_1_0: '${APPDIR}/usr/lib/x86_64-linux-gnu/gstreamer-1.0'
+      PYTHONPATH: '${APPDIR}/usr/lib/python3/dist-packages'
+      GSETTINGS_SCHEMA_DIR: '${APPDIR}/usr/share/glib-2.0/schemas'
+
+AppImage:
+  arch: x86_64
+  update-information: guess

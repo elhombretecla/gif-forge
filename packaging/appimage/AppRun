@@ -1,0 +1,47 @@
+#!/bin/sh
+# AppRun for the GIF Forge AppImage.
+#
+# Wires up the bundled Python + GTK4/Libadwaita + GStreamer + GObject
+# introspection stack and the bundled ffmpeg/gifski binaries, then launches the
+# app. Everything lives under $APPDIR/usr.
+set -eu
+
+HERE="$(dirname "$(readlink -f "$0")")"
+APPDIR="$HERE"
+USR="$APPDIR/usr"
+
+# --- bundled binaries (ffmpeg, gifski) ---------------------------------------
+# GIF Forge calls `ffmpeg`/`gifski` by bare name; make ours win.
+export PATH="$USR/bin${PATH:+:$PATH}"
+
+# --- shared libraries --------------------------------------------------------
+export LD_LIBRARY_PATH="$USR/lib:$USR/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+# --- GObject introspection typelibs ------------------------------------------
+export GI_TYPELIB_PATH="$USR/lib/girepository-1.0:$USR/lib/x86_64-linux-gnu/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
+
+# --- GStreamer plugins + a writable registry ---------------------------------
+export GST_PLUGIN_SYSTEM_PATH_1_0="$USR/lib/x86_64-linux-gnu/gstreamer-1.0:$USR/lib/gstreamer-1.0"
+export GST_PLUGIN_PATH="$GST_PLUGIN_SYSTEM_PATH_1_0"
+export GST_REGISTRY="${XDG_CACHE_HOME:-$HOME/.cache}/gif-forge-appimage/gst-registry.bin"
+mkdir -p "$(dirname "$GST_REGISTRY")"
+
+# --- gdk-pixbuf loaders ------------------------------------------------------
+if [ -f "$USR/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders.cache" ]; then
+  export GDK_PIXBUF_MODULE_FILE="$USR/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders.cache"
+  export GDK_PIXBUF_MODULEDIR="$USR/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders"
+fi
+
+# --- GSettings schemas (falls back to JSON config if missing) ----------------
+export GSETTINGS_SCHEMA_DIR="$USR/share/glib-2.0/schemas${GSETTINGS_SCHEMA_DIR:+:$GSETTINGS_SCHEMA_DIR}"
+
+# --- icons / app data --------------------------------------------------------
+export XDG_DATA_DIRS="$USR/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+
+# --- bundled Python ----------------------------------------------------------
+PYVER="$(ls "$USR/lib" | grep -E '^python3\.[0-9]+$' | head -n1)"
+export PYTHONHOME="$USR"
+export PYTHONPATH="$USR/lib/$PYVER/site-packages${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONDONTWRITEBYTECODE=1
+
+exec "$USR/bin/$PYVER" -m gifforge "$@"
