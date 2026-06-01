@@ -9,6 +9,7 @@ Runtime (system, via PyGObject — not pip-installable):
 
 - Python ≥ 3.10
 - GTK 4, Libadwaita 1
+- pycairo + the PyGObject cairo bridge (overlay rendering at export time)
 - GStreamer with the `pipewiresrc` and `vp9enc` plugins (Wayland capture)
 - `ffmpeg` (mandatory: X11 capture, frame decode, all encoding)
 - `gifski` (optional: higher-quality GIFs)
@@ -16,7 +17,7 @@ Runtime (system, via PyGObject — not pip-installable):
 On Debian/Ubuntu:
 
 ```sh
-sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 \
+sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-adw-1 \
     gstreamer1.0-pipewire gstreamer1.0-plugins-good ffmpeg
 ```
 

@@ -17,6 +17,7 @@ BuildRequires:  desktop-file-utils
 BuildRequires:  libappstream-glib
 
 Requires:       python3-gobject
+Requires:       python3-cairo
 Requires:       gtk4
 Requires:       libadwaita
 Requires:       gstreamer1-plugin-pipewire

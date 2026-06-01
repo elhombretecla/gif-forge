@@ -12,6 +12,7 @@ pkgbase = gif-forge
 	makedepends = glib2
 	depends = python
 	depends = python-gobject
+	depends = python-cairo
 	depends = gtk4
 	depends = libadwaita
 	depends = gst-plugin-pipewire

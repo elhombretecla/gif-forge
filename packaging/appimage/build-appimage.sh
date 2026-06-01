@@ -28,7 +28,7 @@ mkdir -p "$USR/bin" "$USR/lib" dist
 
 # --- 1. system build dependencies (the AppImage bundles copies of these) -----
 # On CI these are installed by the workflow; listed here for local runs.
-#   sudo apt-get install -y python3 python3-pip python3-gi \
+#   sudo apt-get install -y python3 python3-pip python3-gi python3-gi-cairo \
 #     gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-gdkpixbuf-2.0 \
 #     gstreamer1.0-pipewire gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
 #     libgirepository-1.0-1 wget file desktop-file-utils
@@ -54,6 +54,12 @@ python3 -m pip install --no-deps --no-compile \
 # `import gi` must match the bundled interpreter's ABI.
 GI_SRC="$(python3 -c 'import gi, os; print(os.path.dirname(gi.__file__))')"
 cp -a "$GI_SRC" "$USR/lib/$PYVER/site-packages/"
+
+# pycairo (`import cairo`) — overlay rendering at export time needs it, and the
+# gi cairo foreign-struct converter (_gi_cairo) ships inside the gi package above.
+CAIRO_SRC="$(python3 -c 'import cairo, os; print(os.path.dirname(cairo.__file__))' 2>/dev/null || true)"
+[ -n "$CAIRO_SRC" ] && cp -a "$CAIRO_SRC" "$USR/lib/$PYVER/site-packages/" \
+  || echo "WARN: pycairo not found; overlay export will fail" >&2
 
 TYPELIB_DIR="/usr/lib/$ARCH-linux-gnu/girepository-1.0"
 mkdir -p "$USR/lib/$ARCH-linux-gnu/girepository-1.0"

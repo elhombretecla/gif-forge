@@ -38,7 +38,7 @@ flatpak-builder --user --install --force-clean build \
 On Debian/Ubuntu the runtime dependencies are:
 
 ```sh
-sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 \
+sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-adw-1 \
     gstreamer1.0-pipewire gstreamer1.0-plugins-good ffmpeg
 ```
 
