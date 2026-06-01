@@ -59,7 +59,7 @@ log = logging.getLogger(__name__)
 
 
 class EditorWindow(Adw.ApplicationWindow):
-    __gtype_name__ = "PeekEditorWindow"
+    __gtype_name__ = "GifForgeEditorWindow"
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
