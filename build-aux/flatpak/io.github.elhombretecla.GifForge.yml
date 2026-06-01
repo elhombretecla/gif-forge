@@ -22,9 +22,11 @@ finish-args:
   - --socket=fallback-x11
   - --share=ipc
   - --device=dri
-  # Screen capture: ScreenCast portal hands us a PipeWire fd; pipewiresrc uses it.
+  # Screen capture: the ScreenCast portal hands us a PipeWire fd; pipewiresrc
+  # uses it. Flatpak has no `pipewire` socket type — PipeWire access is granted
+  # by exposing its runtime socket via the filesystem.
   - --talk-name=org.freedesktop.portal.ScreenCast
-  - --socket=pipewire
+  - --filesystem=xdg-run/pipewire-0
   # Notifications + saving recordings.
   - --talk-name=org.freedesktop.portal.Notification
   - --filesystem=xdg-pictures
