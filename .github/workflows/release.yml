@@ -1,0 +1,114 @@
+name: Release
+
+# Build the downloadable artifacts (.deb, AppImage, Flatpak bundle) and attach
+# them to the GitHub Release when a version tag is pushed.
+#
+# The AUR PKGBUILD and the Fedora .spec are published manually to AUR / COPR by
+# the maintainer (see docs/PACKAGING.md); they are not built here.
+on:
+  push:
+    tags:
+      - 'v*'
+  # Allow building the artifacts on demand without publishing a release.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deb:
+    name: Build .deb
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            devscripts debhelper dh-python \
+            pybuild-plugin-pyproject python3-all python3-setuptools \
+            python3-pip libglib2.0-bin
+
+      - name: Ensure setuptools>=77 for pybuild (PEP 639 SPDX license)
+        # pyproject.toml uses `license = "GPL-3.0-or-later"`, which the system
+        # setuptools on Ubuntu is too old to parse. pybuild uses the system
+        # interpreter's setuptools, so upgrade it in place.
+        run: |
+          sudo python3 -m pip install -U 'setuptools>=77' 'packaging>=24.2' \
+            || sudo python3 -m pip install --break-system-packages -U 'setuptools>=77' 'packaging>=24.2'
+
+      - name: Build package
+        run: sh packaging/deb/build-deb.sh
+
+      - name: Collect artifact
+        run: |
+          mkdir -p dist
+          cp ../gif-forge_*_all.deb dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb
+          path: dist/*.deb
+
+  appimage:
+    name: Build AppImage
+    runs-on: ubuntu-22.04
+    # The AppImage bundles the entire Python + GTK4 + GStreamer + ffmpeg stack
+    # and is the most fragile channel; don't let it block the .deb/Flatpak
+    # release if it breaks.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build AppImage
+        run: sh packaging/appimage/build-appimage.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: appimage
+          path: dist/*.AppImage
+
+  flatpak:
+    name: Build Flatpak bundle
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: gif-forge.flatpak
+          manifest-path: build-aux/flatpak/io.github.elhombretecla.GifForge.yml
+          cache-key: flatpak-builder-${{ github.sha }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flatpak
+          path: gif-forge.flatpak
+
+  publish:
+    name: Publish release
+    needs: [deb, appimage, flatpak]
+    if: always() && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten and checksum
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name '*.deb' -o -name '*.AppImage' -o -name '*.flatpak' \) \
+            -exec cp {} release/ \;
+          cd release
+          sha256sum * > SHA256SUMS
+          ls -l
+
+      - name: Attach to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          fail_on_unmatched_files: false

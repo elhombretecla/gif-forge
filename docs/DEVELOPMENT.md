@@ -61,6 +61,14 @@ flatpak run io.github.elhombretecla.GifForge
 The manifest bundles `ffmpeg` (built with the exact codecs/filters GIF Forge
 uses — note the `concat` demuxer needed by the exporter) and `gifski`.
 
+## Packaging
+
+GIF Forge ships through several channels (Flatpak, AppImage, `.deb`, Arch AUR,
+Fedora/COPR). The recipes live in `debian/`, `packaging/{appimage,aur,rpm}/` and
+`build-aux/flatpak/`, and a tag push drives `.github/workflows/release.yml`. See
+[`PACKAGING.md`](PACKAGING.md) for the full maintainer guide, including the
+version-from-tag flow and the manual AUR/COPR publish steps.
+
 ## Architecture
 
 Layered, capture-backend-agnostic (see the full plan in

@@ -1,0 +1,38 @@
+Source: gif-forge
+Section: graphics
+Priority: optional
+Maintainer: Juan de la Cruz García <delacruzgarciajuan@gmail.com>
+Build-Depends: debhelper-compat (= 13),
+               dh-python,
+               python3-all,
+               python3-setuptools,
+               pybuild-plugin-pyproject,
+               libglib2.0-bin
+Standards-Version: 4.6.2
+Homepage: https://github.com/elhombretecla/gif-forge
+Rules-Requires-Root: no
+
+Package: gif-forge
+Architecture: all
+Depends: ${python3:Depends},
+         ${misc:Depends},
+         python3-gi,
+         gir1.2-gtk-4.0,
+         gir1.2-adw-1,
+         gir1.2-gdkpixbuf-2.0,
+         gir1.2-glib-2.0,
+         gstreamer1.0-pipewire,
+         gstreamer1.0-plugins-good,
+         gstreamer1.0-plugins-bad,
+         ffmpeg
+Recommends: gifski
+Suggests: xdg-desktop-portal-gnome | xdg-desktop-portal-wlr | xdg-desktop-portal-kde
+Description: Modern Linux screen recorder and GIF/video editor
+ GIF Forge records a region, window or screen on Wayland or X11, then lets you
+ refine the result on a timeline (trim, cut, reorder, retime, crop, undo/redo)
+ before exporting an optimized GIF, WebM or APNG. Projects are saveable and
+ survive crashes.
+ .
+ It is built in Python with GTK4 and Libadwaita and uses ffmpeg (and optionally
+ gifski) for encoding. Wayland capture goes through the ScreenCast portal and
+ PipeWire; X11 capture uses ffmpeg's xcbgrab.
