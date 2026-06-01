@@ -39,7 +39,7 @@ THUMB_HEIGHT = 72
 
 
 class FrameObject(GObject.Object):
-    __gtype_name__ = "PeekFrameObject"
+    __gtype_name__ = "GifForgeFrameObject"
 
     def __init__(self, index: int, path: str, delay_ms: int) -> None:
         super().__init__()
@@ -49,7 +49,7 @@ class FrameObject(GObject.Object):
 
 
 class FrameStrip(Gtk.ScrolledWindow):
-    __gtype_name__ = "PeekFrameStrip"
+    __gtype_name__ = "GifForgeFrameStrip"
     __gsignals__ = {
         "current-changed": (GObject.SignalFlags.RUN_FIRST, None, (int,)),
     }

@@ -28,7 +28,7 @@ _DARK = (0.40, 0.40, 0.40)
 
 
 class Preview(Gtk.ScrolledWindow):
-    __gtype_name__ = "PeekPreview"
+    __gtype_name__ = "GifForgePreview"
 
     def __init__(self) -> None:
         super().__init__()

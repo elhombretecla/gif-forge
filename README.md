@@ -54,7 +54,5 @@ GIF Forge began as a ground-up rewrite of
 which was [deprecated in 2024](https://github.com/phw/peek/issues/1191). GIF
 Forge is an independent project — built from scratch in Python/GTK4 rather than
 Peek's original Vala/GTK3 — but it builds on Peek's packaging and ffmpeg/gifski
-encoding knowledge under the same GPL-3.0-or-later license.
-
-Heartfelt thanks to Philipp Wolfer and all of Peek's contributors. See
+encoding knowledge under the same GPL-3.0-or-later license. See
 [`AUTHORS`](AUTHORS) for full attribution.

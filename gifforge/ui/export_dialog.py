@@ -32,7 +32,7 @@ log = logging.getLogger(__name__)
 
 
 class ExportDialog(Adw.Window):
-    __gtype_name__ = "PeekExportDialog"
+    __gtype_name__ = "GifForgeExportDialog"
 
     def __init__(self, parent: Gtk.Window, frames: FrameList, overlays=None) -> None:
         super().__init__(transient_for=parent, modal=True)
