@@ -78,7 +78,8 @@ GST_SRC="/usr/lib/$ARCH-linux-gnu/gstreamer-1.0"
 GST_DST="$USR/lib/$ARCH-linux-gnu/gstreamer-1.0"
 mkdir -p "$GST_DST"
 for p in libgstcoreelements libgstpipewire libgstvpx libgstapp \
-         libgstvideoconvertscale libgstmatroska libgstisomp4 \
+         libgstvideoconvertscale libgstvideoconvert libgstvideoscale \
+         libgstmatroska libgstisomp4 \
          libgstpng libgstplayback libgsttypefindfunctions ; do
   [ -f "$GST_SRC/$p.so" ] && cp "$GST_SRC/$p.so" "$GST_DST/" || \
     echo "WARN: gst plugin $p not found" >&2
@@ -92,13 +93,15 @@ done
 sh build-aux/flatpak/install-data.sh "$USR"
 
 # --- 7. static ffmpeg + gifski ----------------------------------------------
-# ffmpeg: static build (verify it has the concat demuxer + palettegen/paletteuse).
+# ffmpeg: GitHub-hosted static build from BtbN (reliable from CI; GPL build has
+# the concat demuxer + palettegen/paletteuse filters the exporter needs).
 if [ ! -x "$USR/bin/ffmpeg" ]; then
-  wget -qO /tmp/ffmpeg.tar.xz \
-    "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-${ARCH}-static.tar.xz"
-  tar -xf /tmp/ffmpeg.tar.xz -C /tmp
-  cp /tmp/ffmpeg-*-static/ffmpeg "$USR/bin/ffmpeg"
-  chmod +x "$USR/bin/ffmpeg"
+  FF_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-linux64-gpl-7.1.tar.xz"
+  wget -qO /tmp/ffmpeg.tar.xz "$FF_URL"
+  mkdir -p /tmp/ffmpeg-extract
+  tar -xf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg-extract
+  FF_BIN="$(find /tmp/ffmpeg-extract -type f -name ffmpeg | head -n1)"
+  install -Dm755 "$FF_BIN" "$USR/bin/ffmpeg"
 fi
 # gifski: prebuilt binary from the release page (optional; app degrades without).
 if [ ! -x "$USR/bin/gifski" ]; then
@@ -110,13 +113,10 @@ if [ ! -x "$USR/bin/gifski" ]; then
   fi
 fi
 
-# --- 8. AppRun, top-level desktop + icon -------------------------------------
-cp "$PKGDIR/AppRun" "$APPDIR/AppRun"
-chmod +x "$APPDIR/AppRun"
-cp "data/$APPID.desktop" "$APPDIR/$APPID.desktop"
-cp "data/icons/256x256/$APPID.png" "$APPDIR/$APPID.png"
-
-# --- 9. linuxdeploy + gtk plugin --------------------------------------------
+# --- 8. linuxdeploy + gtk plugin ---------------------------------------------
+# AppRun, the desktop file and the icon are passed to linuxdeploy from their
+# repo sources below — it installs them into the AppDir. Do NOT pre-copy them
+# into the AppDir, or linuxdeploy fails copying a file onto itself.
 TOOLDIR="$ROOT/.appimage-tools"
 mkdir -p "$TOOLDIR"
 fetch() { # fetch <url> <dest>
@@ -130,12 +130,13 @@ fetch "https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/mast
 export OUTPUT="dist/GIF_Forge-${VERSION}-${ARCH}.AppImage"
 export DEPLOY_GTK_VERSION=4
 
+chmod +x "$PKGDIR/AppRun"
 "$TOOLDIR/linuxdeploy" \
   --appdir "$APPDIR" \
   --plugin gtk \
-  --custom-apprun "$APPDIR/AppRun" \
-  --desktop-file "$APPDIR/$APPID.desktop" \
-  --icon-file "$APPDIR/$APPID.png" \
+  --custom-apprun "$PKGDIR/AppRun" \
+  --desktop-file "data/$APPID.desktop" \
+  --icon-file "data/icons/256x256/$APPID.png" \
   --output appimage
 
 echo "Built: $OUTPUT"
