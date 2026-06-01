@@ -55,6 +55,17 @@
       <default>true</default>
       <summary>Open the editor after recording instead of saving immediately</summary>
     </key>
+    <key name="interface-language" type="s">
+      <choices>
+        <choice value="en"/>
+        <choice value="es"/>
+        <choice value="fr"/>
+        <choice value="de"/>
+        <choice value="pt"/>
+      </choices>
+      <default>"en"</default>
+      <summary>UI language (applied on next launch)</summary>
+    </key>
     <key name="persist-save-folder" type="s">
       <default>""</default>
       <summary>Path where the last recording was saved</summary>

@@ -24,6 +24,18 @@ fi
 
 export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 
+# --- compile translations into a cache dir (so language switching works) -----
+LOCALE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/gif-forge-dev/locale"
+if command -v msgfmt >/dev/null 2>&1; then
+  for po in po/*.po; do
+    [ -e "$po" ] || continue
+    lang="$(basename "$po" .po)"
+    mkdir -p "$LOCALE_DIR/$lang/LC_MESSAGES"
+    msgfmt "$po" -o "$LOCALE_DIR/$lang/LC_MESSAGES/gif-forge.mo"
+  done
+  export GIFFORGE_LOCALEDIR="$LOCALE_DIR"
+fi
+
 # --- check runtime dependencies (warn, don't fail) ---------------------------
 python3 - <<'PY' || true
 import shutil, sys

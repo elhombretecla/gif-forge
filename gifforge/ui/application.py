@@ -19,6 +19,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
 
 from .. import APP_ID, APP_NAME, __version__  # noqa: E402
+from ..i18n import _  # noqa: E402
 from ..project import SessionCache, list_recoverable, load_project  # noqa: E402
 from ..settings import get_settings  # noqa: E402
 from .preferences_window import PreferencesWindow  # noqa: E402
@@ -86,14 +87,14 @@ class GifForgeApplication(Adw.Application):
             transient_for=self.props.active_window,
             modal=True,
             message_type=Gtk.MessageType.QUESTION,
-            text="Recover unsaved recording?",
-            secondary_text=(
-                f"{len(recoverable)} recording(s) from a previous session were not "
-                "saved. Recover them in the editor?"
-            ),
+            text=_("Recover unsaved recording?"),
+            secondary_text=_(
+                "{count} recording(s) from a previous session were not saved. "
+                "Recover them in the editor?"
+            ).format(count=len(recoverable)),
         )
-        dialog.add_button("_Discard", Gtk.ResponseType.REJECT)
-        dialog.add_button("_Recover", Gtk.ResponseType.ACCEPT)
+        dialog.add_button(_("_Discard"), Gtk.ResponseType.REJECT)
+        dialog.add_button(_("_Recover"), Gtk.ResponseType.ACCEPT)
         dialog.set_default_response(Gtk.ResponseType.ACCEPT)
         dialog.connect("response", self._on_recovery_response, recoverable)
         dialog.show()
@@ -138,7 +139,7 @@ class GifForgeApplication(Adw.Application):
             logo_icon_name=APP_ID,
             version=__version__,
             license_type=Gtk.License.GPL_3_0,
-            comments="Record and edit screen captures as GIF, video or APNG.",
+            comments=_("Record and edit screen captures as GIF, video or APNG."),
         )
 
         # Load the app logo PNG directly so it shows even when running from
@@ -191,6 +192,10 @@ class GifForgeApplication(Adw.Application):
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO)
+    # Set up translations before any window (and thus any string) is built.
+    from .. import i18n
+
+    i18n.init(get_settings().get("interface-language"))
     Adw.init()
     app = GifForgeApplication()
     return app.run(None)

@@ -18,4 +18,17 @@ for size in 512x512 256x256 128x128 64x64 48x48; do
     "$SHARE/icons/hicolor/$size/apps/$APPID.png"
 done
 
+# Translations: compile each po/<lang>.po into the gettext "gif-forge" domain.
+# Falls back to English (no catalogue) if gettext's msgfmt isn't available.
+if command -v msgfmt >/dev/null 2>&1; then
+  for po in po/*.po; do
+    [ -e "$po" ] || continue
+    lang="$(basename "$po" .po)"
+    install -d "$SHARE/locale/$lang/LC_MESSAGES"
+    msgfmt "$po" -o "$SHARE/locale/$lang/LC_MESSAGES/gif-forge.mo"
+  done
+else
+  echo "msgfmt not found — skipping translations (UI will be English only)" >&2
+fi
+
 echo "Installed GIF Forge data files into $PREFIX"
