@@ -86,21 +86,23 @@ modules:
       - --enable-protocol=file
       - --enable-indev=xcbgrab
     sources:
-      # Verified source/checksum carried over from Peek's manifest. 4.4.1 already
-      # provides the concat demuxer + format filter we rely on. TODO before a
-      # real Flathub submission: bump to a current ffmpeg release and update the
-      # sha256 to the matching published checksum.
+      # Current ffmpeg release. 4.4.1 (inherited from Peek) no longer compiles
+      # with modern binutils (mathops.h `shr` operand mismatch); 7.1.x builds
+      # cleanly and keeps every codec/demuxer/filter enabled below. sha256
+      # computed from the published https://ffmpeg.org/releases tarball.
       - type: archive
-        url: https://ffmpeg.org/releases/ffmpeg-4.4.1.tar.xz
-        sha256: eadbad9e9ab30b25f5520fbfde99fae4a92a1ae3c0257a8d68569a4651e30e02
+        url: https://ffmpeg.org/releases/ffmpeg-7.1.4.tar.xz
+        sha256: 71f4aac3573ed9060489cb62526a6c7dda815ae10993789611acd7be9fa9fbf4
     modules:
-      - name: yasm
+      # ffmpeg 7.x needs nasm for its x86 assembly (yasm is no longer
+      # sufficient); the GNOME SDK doesn't ship an assembler, so build one here.
+      - name: nasm
         cleanup:
           - "*"
         sources:
           - type: archive
-            url: http://www.tortall.net/projects/yasm/releases/yasm-1.3.0.tar.gz
-            sha256: 3dce6601b495f5b3d45b59f7d2492a340ee7e84b5beca17e48f862502bd5603f
+            url: https://www.nasm.us/pub/nasm/releasebuilds/2.16.03/nasm-2.16.03.tar.xz
+            sha256: 1412a1c760bbd05db026b6c0d1657affd6631cd0a63cddb6f73cc6d4aa616148
       - name: libx264
         config-opts:
           - --enable-pic
