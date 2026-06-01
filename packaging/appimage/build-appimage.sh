@@ -113,13 +113,10 @@ if [ ! -x "$USR/bin/gifski" ]; then
   fi
 fi
 
-# --- 8. AppRun, top-level desktop + icon -------------------------------------
-cp "$PKGDIR/AppRun" "$APPDIR/AppRun"
-chmod +x "$APPDIR/AppRun"
-cp "data/$APPID.desktop" "$APPDIR/$APPID.desktop"
-cp "data/icons/256x256/$APPID.png" "$APPDIR/$APPID.png"
-
-# --- 9. linuxdeploy + gtk plugin --------------------------------------------
+# --- 8. linuxdeploy + gtk plugin ---------------------------------------------
+# AppRun, the desktop file and the icon are passed to linuxdeploy from their
+# repo sources below — it installs them into the AppDir. Do NOT pre-copy them
+# into the AppDir, or linuxdeploy fails copying a file onto itself.
 TOOLDIR="$ROOT/.appimage-tools"
 mkdir -p "$TOOLDIR"
 fetch() { # fetch <url> <dest>
@@ -133,12 +130,13 @@ fetch "https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/mast
 export OUTPUT="dist/GIF_Forge-${VERSION}-${ARCH}.AppImage"
 export DEPLOY_GTK_VERSION=4
 
+chmod +x "$PKGDIR/AppRun"
 "$TOOLDIR/linuxdeploy" \
   --appdir "$APPDIR" \
   --plugin gtk \
-  --custom-apprun "$APPDIR/AppRun" \
-  --desktop-file "$APPDIR/$APPID.desktop" \
-  --icon-file "$APPDIR/$APPID.png" \
+  --custom-apprun "$PKGDIR/AppRun" \
+  --desktop-file "data/$APPID.desktop" \
+  --icon-file "data/icons/256x256/$APPID.png" \
   --output appimage
 
 echo "Built: $OUTPUT"
