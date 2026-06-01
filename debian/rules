@@ -16,3 +16,13 @@ export PYBUILD_NAME=gifforge
 # CI (ci.yml), not at package build time.
 override_dh_auto_test:
 
+# Compile the translation catalogues into the gettext "gif-forge" domain. The
+# .install file handles the static data files; .mo files must be generated.
+override_dh_auto_install:
+	dh_auto_install
+	set -e; for po in po/*.po; do \
+	  lang=$$(basename $$po .po); \
+	  install -d debian/gif-forge/usr/share/locale/$$lang/LC_MESSAGES; \
+	  msgfmt $$po -o debian/gif-forge/usr/share/locale/$$lang/LC_MESSAGES/gif-forge.mo; \
+	done
+

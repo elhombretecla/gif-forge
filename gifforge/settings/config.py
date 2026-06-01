@@ -39,6 +39,7 @@ DEFAULTS: Dict[str, Any] = {
     "interface-show-notification": True,
     "interface-prefer-dark-theme": True,
     "interface-open-editor-after-recording": True,
+    "interface-language": "en",
     "persist-save-folder": "",
 }
 

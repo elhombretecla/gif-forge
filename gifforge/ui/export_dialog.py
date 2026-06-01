@@ -24,6 +24,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 
 from .. import APP_NAME  # noqa: E402
+from ..i18n import _  # noqa: E402
 from ..encode import DEFAULT_PRESETS, export_frames  # noqa: E402
 from ..encode.presets import ExportPreset  # noqa: E402
 from ..frames.model import FrameList  # noqa: E402
@@ -36,7 +37,7 @@ class ExportDialog(Adw.Window):
 
     def __init__(self, parent: Gtk.Window, frames: FrameList, overlays=None) -> None:
         super().__init__(transient_for=parent, modal=True)
-        self.set_title("Export")
+        self.set_title(_("Export"))
         self.set_default_size(380, 220)
         self._frames = frames
         self._overlays = overlays or []
@@ -48,9 +49,9 @@ class ExportDialog(Adw.Window):
         root.append(Adw.HeaderBar())
 
         page = Adw.PreferencesPage()
-        group = Adw.PreferencesGroup(title="Export settings")
+        group = Adw.PreferencesGroup(title=_("Export settings"))
 
-        self._preset_row = Adw.ComboRow(title="Preset")
+        self._preset_row = Adw.ComboRow(title=_("Preset"))
         self._preset_row.set_model(
             Gtk.StringList.new([p.name for p in DEFAULT_PRESETS])
         )
@@ -72,11 +73,11 @@ class ExportDialog(Adw.Window):
         self._spinner = Gtk.Spinner()
         actions.append(self._spinner)
 
-        cancel = Gtk.Button(label="Cancel")
+        cancel = Gtk.Button(label=_("Cancel"))
         cancel.connect("clicked", lambda *_: self.close())
         actions.append(cancel)
 
-        self._export_button = Gtk.Button(label="Export…")
+        self._export_button = Gtk.Button(label=_("Export…"))
         self._export_button.add_css_class("suggested-action")
         self._export_button.connect("clicked", lambda *_: self._choose_and_export())
         actions.append(self._export_button)
@@ -97,7 +98,7 @@ class ExportDialog(Adw.Window):
         self._busy = True
         preset = self.selected_preset
         self._export_button.set_sensitive(False)
-        self._progress.set_label("Encoding…")
+        self._progress.set_label(_("Encoding…"))
         self._spinner.start()
         thread = threading.Thread(
             target=self._worker, args=(preset, Path(dest)), daemon=True
@@ -111,11 +112,11 @@ class ExportDialog(Adw.Window):
         ext = preset.output_format.file_extension
         default_name = time.strftime(f"{APP_NAME} %Y-%m-%d %H-%M") + f".{ext}"
         chooser = Gtk.FileChooserNative(
-            title="Export recording",
+            title=_("Export recording"),
             transient_for=self,
             action=Gtk.FileChooserAction.SAVE,
-            accept_label="_Export",
-            cancel_label="_Cancel",
+            accept_label=_("_Export"),
+            cancel_label=_("_Cancel"),
         )
         chooser.set_current_name(default_name)
         chooser.connect("response", self._on_chooser_response)
@@ -157,7 +158,7 @@ class ExportDialog(Adw.Window):
         self._busy = False
         self._spinner.stop()
         self._export_button.set_sensitive(True)
-        self._progress.set_label(f"Failed: {message}")
+        self._progress.set_label(_("Failed: {error}").format(error=message))
         log.error("export failed: %s", message)
         return False
 
@@ -165,6 +166,6 @@ class ExportDialog(Adw.Window):
         app = self.get_transient_for().get_application() if self.get_transient_for() else None
         if app is None:
             return
-        note = Gio.Notification.new("Export complete")
+        note = Gio.Notification.new(_("Export complete"))
         note.set_body(str(dest))
         app.send_notification("gif-forge-exported", note)

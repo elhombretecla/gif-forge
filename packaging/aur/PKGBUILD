@@ -22,7 +22,7 @@ optdepends=(
   'xdg-desktop-portal-gnome: Wayland screen capture (GNOME)'
   'xdg-desktop-portal-wlr: Wayland screen capture (wlroots)'
 )
-makedepends=('python-build' 'python-installer' 'python-setuptools' 'python-wheel' 'glib2')
+makedepends=('python-build' 'python-installer' 'python-setuptools' 'python-wheel' 'glib2' 'gettext')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/elhombretecla/gif-forge/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 

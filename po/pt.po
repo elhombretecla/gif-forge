@@ -1,0 +1,470 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: gif-forge 0.1.0\n"
+"Report-Msgid-Bugs-To: https://github.com/elhombretecla/gif-forge/issues\n"
+"Language-Team: Portuguese\n"
+"Language: pt\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: gifforge/ui/recorder_window.py:605
+msgid "About GIF Forge"
+msgstr "Sobre o GIF Forge"
+
+#: gifforge/ui/editor_window.py:209
+msgid "Action"
+msgstr "Ação"
+
+#: gifforge/ui/editor_window.py:634
+msgid "Add"
+msgstr "Adicionar"
+
+#: gifforge/ui/editor_window.py:620
+msgid "Add caption"
+msgstr "Adicionar legenda"
+
+#: gifforge/ui/editor_window.py:137
+msgid "Add caption…"
+msgstr "Adicionar legenda…"
+
+#: gifforge/ui/editor_window.py:230
+msgid "All"
+msgstr "Tudo"
+
+#: gifforge/ui/preferences_window.py:90
+msgid "Applied after restarting GIF Forge"
+msgstr "Aplicado após reiniciar o GIF Forge"
+
+#: gifforge/ui/editor_window.py:600
+msgid "Apply"
+msgstr "Aplicar"
+
+#: gifforge/ui/editor_window.py:527
+msgid "Can't cut every frame"
+msgstr "Não é possível cortar todos os quadros"
+
+#: gifforge/ui/editor_window.py:474
+msgid "Can't delete every frame"
+msgstr "Não é possível eliminar todos os quadros"
+
+#: gifforge/ui/editor_window.py:562 gifforge/ui/editor_window.py:598
+#: gifforge/ui/editor_window.py:632 gifforge/ui/export_dialog.py:76
+#: gifforge/ui/recorder_window.py:286
+msgid "Cancel"
+msgstr "Cancelar"
+
+#: gifforge/ui/editor_window.py:659
+msgid "Caption added: “{text}”"
+msgstr "Legenda adicionada: «{text}»"
+
+#: gifforge/ui/editor_window.py:626
+msgid "Caption text"
+msgstr "Texto da legenda"
+
+#: gifforge/ui/preferences_window.py:53
+msgid "Capture mouse cursor"
+msgstr "Capturar o cursor do rato"
+
+#: gifforge/ui/preferences_window.py:54
+msgid "Capture sound (WebM only)"
+msgstr "Capturar som (apenas WebM)"
+
+#: gifforge/ui/editor_window.py:213
+msgid "Clipboard"
+msgstr "Área de transferência"
+
+#: gifforge/ui/recorder_window.py:581
+msgid "Controls"
+msgstr "Controlos"
+
+#: gifforge/ui/editor_window.py:521
+msgid "Copied {count} frame(s)"
+msgstr "{count} quadro(s) copiado(s)"
+
+#: gifforge/ui/editor_window.py:214
+msgid "Copy"
+msgstr "Copiar"
+
+#: gifforge/ui/recorder_window.py:335
+msgid "Could not determine recording area"
+msgstr "Não foi possível determinar a área de gravação"
+
+#: gifforge/ui/editor_window.py:734
+msgid "Could not open project"
+msgstr "Não foi possível abrir o projeto"
+
+#: gifforge/ui/recorder_window.py:344
+msgid "Could not start recording"
+msgstr "Não foi possível iniciar a gravação"
+
+#: gifforge/ui/editor_window.py:215
+msgid "Cut"
+msgstr "Cortar"
+
+#: gifforge/ui/editor_window.py:150
+msgid "Decrease delay"
+msgstr "Diminuir atraso"
+
+#: gifforge/ui/editor_window.py:592
+msgid "Delay for {count} frame(s), in ms:"
+msgstr "Atraso para {count} quadro(s), em ms:"
+
+#: gifforge/ui/editor_window.py:224
+msgid "Delay…"
+msgstr "Atraso…"
+
+#: gifforge/ui/editor_window.py:222
+msgid "Delete"
+msgstr "Eliminar"
+
+#: gifforge/ui/editor_window.py:131
+msgid "Delete selected"
+msgstr "Eliminar seleção"
+
+#: gifforge/ui/recorder_window.py:526
+msgid "Discarded"
+msgstr "Descartado"
+
+#: gifforge/ui/editor_window.py:147
+msgid "Double speed"
+msgstr "Velocidade dupla"
+
+#: gifforge/ui/preferences_window.py:51
+msgid "Downsample"
+msgstr "Subamostragem"
+
+#: gifforge/ui/recorder_window.py:133
+msgid "Drag over what you want to capture"
+msgstr "Arraste sobre o que pretende capturar"
+
+#: gifforge/ui/editor_window.py:223
+msgid "Duplicate"
+msgstr "Duplicar"
+
+#: gifforge/ui/editor_window.py:132
+msgid "Duplicate selected"
+msgstr "Duplicar seleção"
+
+#: gifforge/ui/editor_window.py:66
+msgid "Editor"
+msgstr "Editor"
+
+#: gifforge/ui/recorder_window.py:415
+msgid "Encoding failed"
+msgstr "Falha na codificação"
+
+#: gifforge/ui/export_dialog.py:101 gifforge/ui/recorder_window.py:363
+msgid "Encoding…"
+msgstr "A codificar…"
+
+#: gifforge/ui/export_dialog.py:40
+msgid "Export"
+msgstr "Exportar"
+
+#: gifforge/ui/export_dialog.py:169
+msgid "Export complete"
+msgstr "Exportação concluída"
+
+#: gifforge/ui/export_dialog.py:115
+msgid "Export recording"
+msgstr "Exportar gravação"
+
+#: gifforge/ui/export_dialog.py:52
+msgid "Export settings"
+msgstr "Definições de exportação"
+
+#: gifforge/ui/editor_window.py:101
+msgid "Export the edited timeline"
+msgstr "Exportar a linha do tempo editada"
+
+#: gifforge/ui/editor_window.py:98 gifforge/ui/export_dialog.py:80
+msgid "Export…"
+msgstr "Exportar…"
+
+#: gifforge/ui/export_dialog.py:161
+msgid "Failed: {error}"
+msgstr "Falhou: {error}"
+
+#: gifforge/ui/editor_window.py:265
+msgid "First frame"
+msgstr "Primeiro quadro"
+
+#: gifforge/ui/editor_window.py:238
+msgid "Fit"
+msgstr "Ajustar"
+
+#: gifforge/ui/editor_window.py:586
+msgid "Frame delay"
+msgstr "Atraso do quadro"
+
+#: gifforge/ui/editor_window.py:558
+msgid "Frame number (0–{max}):"
+msgstr "Número do quadro (0–{max}):"
+
+#: gifforge/ui/preferences_window.py:48
+msgid "Frame rate"
+msgstr "Taxa de quadros"
+
+#: gifforge/ui/editor_window.py:221
+msgid "Frames"
+msgstr "Quadros"
+
+#: gifforge/ui/preferences_window.py:61
+msgid "GIF quality"
+msgstr "Qualidade do GIF"
+
+#: gifforge/ui/editor_window.py:564
+msgid "Go"
+msgstr "Ir"
+
+#: gifforge/ui/editor_window.py:553
+msgid "Go to frame"
+msgstr "Ir para o quadro"
+
+#: gifforge/ui/editor_window.py:233
+msgid "Go to…"
+msgstr "Ir para…"
+
+#: gifforge/ui/editor_window.py:148
+msgid "Half speed"
+msgstr "Meia velocidade"
+
+#: gifforge/ui/editor_window.py:149
+msgid "Increase delay"
+msgstr "Aumentar atraso"
+
+#: gifforge/ui/preferences_window.py:70
+msgid "Interface"
+msgstr "Interface"
+
+#: gifforge/ui/editor_window.py:231
+msgid "Inverse"
+msgstr "Inverter"
+
+#: gifforge/ui/preferences_window.py:89
+msgid "Language"
+msgstr "Idioma"
+
+#: gifforge/ui/editor_window.py:269
+msgid "Last frame"
+msgstr "Último quadro"
+
+#: gifforge/ui/editor_window.py:273
+msgid "Loop playback"
+msgstr "Reprodução em ciclo"
+
+#: gifforge/ui/editor_window.py:268
+msgid "Next frame"
+msgstr "Quadro seguinte"
+
+#: gifforge/ui/editor_window.py:279 gifforge/ui/editor_window.py:814
+msgid "No frames"
+msgstr "Sem quadros"
+
+#: gifforge/ui/editor_window.py:232
+msgid "None"
+msgstr "Nenhum"
+
+#: gifforge/ui/preferences_window.py:73
+msgid "Open editor after recording"
+msgstr "Abrir o editor após a gravação"
+
+#: gifforge/ui/editor_window.py:710
+msgid "Open project"
+msgstr "Abrir projeto"
+
+#: gifforge/ui/editor_window.py:126
+msgid "Open project…"
+msgstr "Abrir projeto…"
+
+#: gifforge/ui/preferences_window.py:108 gifforge/ui/recorder_window.py:599
+msgid "Output format"
+msgstr "Formato de saída"
+
+#: gifforge/ui/editor_window.py:216
+msgid "Paste"
+msgstr "Colar"
+
+#: gifforge/ui/editor_window.py:267
+msgid "Play / Pause"
+msgstr "Reproduzir / Pausar"
+
+#: gifforge/ui/preferences_window.py:78
+msgid "Prefer dark theme"
+msgstr "Preferir tema escuro"
+
+#: gifforge/ui/preferences_window.py:38 gifforge/ui/recorder_window.py:604
+msgid "Preferences"
+msgstr "Preferências"
+
+#: gifforge/ui/export_dialog.py:54
+msgid "Preset"
+msgstr "Predefinição"
+
+#: gifforge/ui/editor_window.py:266
+msgid "Previous frame"
+msgstr "Quadro anterior"
+
+#: gifforge/ui/recorder_window.py:360
+msgid "Processing…"
+msgstr "A processar…"
+
+#: gifforge/ui/recorder_window.py:548 gifforge/ui/recorder_window.py:656
+msgid "Record"
+msgstr "Gravar"
+
+#: gifforge/ui/application.py:142
+msgid "Record and edit screen captures as GIF, video or APNG."
+msgstr "Grave e edite capturas de ecrã como GIF, vídeo ou APNG."
+
+#: gifforge/ui/preferences_window.py:43 gifforge/ui/preferences_window.py:45
+msgid "Recording"
+msgstr "Gravação"
+
+#: gifforge/ui/recorder_window.py:622
+msgid "Recording height in pixels"
+msgstr "Altura da gravação em píxeis"
+
+#: gifforge/ui/recorder_window.py:538
+msgid "Recording saved"
+msgstr "Gravação guardada"
+
+#: gifforge/ui/recorder_window.py:621
+msgid "Recording width in pixels"
+msgstr "Largura da gravação em píxeis"
+
+#: gifforge/ui/application.py:90
+msgid "Recover unsaved recording?"
+msgstr "Recuperar a gravação não guardada?"
+
+#: gifforge/ui/editor_window.py:207
+msgid "Redo"
+msgstr "Refazer"
+
+#: gifforge/ui/editor_window.py:143
+msgid "Reduce frames (keep every 2nd)"
+msgstr "Reduzir quadros (manter 1 em cada 2)"
+
+#: gifforge/ui/recorder_window.py:435
+msgid ""
+"Region capture on this session needs the Wayland portal backend. Run on X11 "
+"for now."
+msgstr ""
+"A captura de região nesta sessão precisa do backend do portal Wayland. "
+"Utilize X11 por agora."
+
+#: gifforge/ui/editor_window.py:142
+msgid "Remove duplicate frames"
+msgstr "Remover quadros duplicados"
+
+#: gifforge/ui/editor_window.py:208
+msgid "Reset"
+msgstr "Repor"
+
+#: gifforge/ui/preferences_window.py:100
+msgid "Restart GIF Forge to change the language"
+msgstr "Reinicie o GIF Forge para mudar o idioma"
+
+#: gifforge/ui/editor_window.py:141
+msgid "Reverse"
+msgstr "Inverter ordem"
+
+#: gifforge/ui/editor_window.py:679
+msgid "Save project"
+msgstr "Guardar projeto"
+
+#: gifforge/ui/editor_window.py:127
+msgid "Save project…"
+msgstr "Guardar projeto…"
+
+#: gifforge/ui/recorder_window.py:503
+msgid "Save recording"
+msgstr "Guardar gravação"
+
+#: gifforge/ui/editor_window.py:706
+msgid "Saved project to {path}"
+msgstr "Projeto guardado em {path}"
+
+#: gifforge/ui/recorder_window.py:523
+msgid "Saved to {path}"
+msgstr "Guardado em {path}"
+
+#: gifforge/ui/editor_window.py:229
+msgid "Select"
+msgstr "Selecionar"
+
+#: gifforge/ui/preferences_window.py:76
+msgid "Show notification after saving"
+msgstr "Mostrar notificação após guardar"
+
+#: gifforge/ui/preferences_window.py:56
+msgid "Start delay"
+msgstr "Atraso inicial"
+
+#: gifforge/ui/recorder_window.py:350
+msgid "Stop"
+msgstr "Parar"
+
+#: gifforge/ui/editor_window.py:133
+msgid "Trim to selection"
+msgstr "Recortar para a seleção"
+
+#: gifforge/ui/editor_window.py:206
+msgid "Undo"
+msgstr "Desfazer"
+
+#: gifforge/ui/preferences_window.py:64
+msgid "Use gifski encoder"
+msgstr "Utilizar o codificador gifski"
+
+#: gifforge/ui/editor_window.py:242
+msgid "Zoom"
+msgstr "Zoom"
+
+#: gifforge/ui/export_dialog.py:119
+msgid "_Cancel"
+msgstr "_Cancelar"
+
+#: gifforge/ui/application.py:96 gifforge/ui/recorder_window.py:507
+msgid "_Discard"
+msgstr "_Descartar"
+
+#: gifforge/ui/export_dialog.py:118
+msgid "_Export"
+msgstr "_Exportar"
+
+#: gifforge/ui/editor_window.py:713
+msgid "_Open"
+msgstr "_Abrir"
+
+#: gifforge/ui/application.py:97
+msgid "_Recover"
+msgstr "_Recuperar"
+
+#: gifforge/ui/editor_window.py:682 gifforge/ui/recorder_window.py:506
+msgid "_Save"
+msgstr "_Guardar"
+
+#: gifforge/ui/preferences_window.py:62
+msgid "gifski produces higher-quality GIFs when installed."
+msgstr "O gifski produz GIFs de maior qualidade quando está instalado."
+
+#: gifforge/ui/preferences_window.py:66
+msgid "gifski quality"
+msgstr "Qualidade do gifski"
+
+#: gifforge/ui/editor_window.py:819
+msgid "{count} frames · {selected} selected · #{current} · {seconds:.1f}s"
+msgstr ""
+"{count} quadros · {selected} selecionados · #{current} · {seconds:.1f}s"
+
+#: gifforge/ui/application.py:91
+msgid ""
+"{count} recording(s) from a previous session were not saved. Recover them in"
+" the editor?"
+msgstr ""
+"{count} gravação(ões) de uma sessão anterior não foram guardadas. Recuperá-"
+"las no editor?"

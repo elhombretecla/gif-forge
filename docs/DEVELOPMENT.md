@@ -62,6 +62,25 @@ flatpak run io.github.elhombretecla.GifForge
 The manifest bundles `ffmpeg` (built with the exact codecs/filters GIF Forge
 uses — note the `concat` demuxer needed by the exporter) and `gifski`.
 
+## Translations
+
+UI strings are wrapped in `_()` (from `gifforge.i18n`) and translated via
+gettext under the `gif-forge` domain. English is the source language; `po/`
+holds the template (`gif-forge.pot`) and one catalogue per language
+(`es`, `fr`, `de`, `pt` — see `po/LINGUAS`). The language is chosen in
+Preferences → Interface and applied on the next launch.
+
+- **Add/refresh strings:** wrap new strings in `_()`, then regenerate the
+  template and merge it into every catalogue with `sh po/update-pot.sh`
+  (needs `gettext`). Fill in the new `msgstr` in `po/<lang>.po`.
+- **Add a language:** add its code to `po/LINGUAS`, `SUPPORTED_LANGUAGES` in
+  `gifforge/i18n.py`, `_LANGUAGE_NAMES` in `ui/preferences_window.py`, and the
+  `<choices>` in `data/…gschema.xml`, then create `po/<lang>.po`.
+- **Catalogues are compiled to `.mo`** at install time
+  (`build-aux/flatpak/install-data.sh`, `debian/rules`) into
+  `share/locale/<lang>/LC_MESSAGES/gif-forge.mo`. `./run.sh` compiles them into
+  a cache dir and points `GIFFORGE_LOCALEDIR` at it for development.
+
 ## Packaging
 
 GIF Forge ships through several channels (Flatpak, AppImage, `.deb`, Arch AUR,

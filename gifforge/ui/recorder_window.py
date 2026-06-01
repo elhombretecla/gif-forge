@@ -32,6 +32,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gio, GLib, Gtk, Pango  # noqa: E402
 
 from .. import APP_NAME  # noqa: E402
+from ..i18n import _  # noqa: E402
 from ..encode.errors import RecordingError  # noqa: E402
 from ..models import OutputFormat, RecordingArea, RecordingConfig  # noqa: E402
 from ..recorder import RecordingController  # noqa: E402
@@ -129,7 +130,7 @@ class RecorderWindow(Adw.ApplicationWindow):
         self._capture_area.connect("resize", self._on_capture_resize)
         overlay.set_child(self._capture_area)
 
-        self._hint = Gtk.Label(label="Drag over what you want to capture")
+        self._hint = Gtk.Label(label=_("Drag over what you want to capture"))
         self._hint.add_css_class("dim-label")
         self._hint.set_halign(Gtk.Align.CENTER)
         self._hint.set_valign(Gtk.Align.CENTER)
@@ -282,7 +283,7 @@ class RecorderWindow(Adw.ApplicationWindow):
         config = self._build_config()
         self._pending_config = config
         delay = config.start_delay
-        self._controls.set_record_button("Cancel", "destructive-action")
+        self._controls.set_record_button(_("Cancel"), "destructive-action")
         if delay <= 0:
             self._start_recording()
             return
@@ -331,7 +332,7 @@ class RecorderWindow(Adw.ApplicationWindow):
         try:
             area = self._extract_area()
         except Exception as exc:  # noqa: BLE001 - surface any setup error
-            self._show_error("Could not determine recording area", str(exc))
+            self._show_error(_("Could not determine recording area"), str(exc))
             self._reset_idle_ui()
             return
 
@@ -340,13 +341,13 @@ class RecorderWindow(Adw.ApplicationWindow):
             backend = self._controller.start(area)  # noqa: F841
         except Exception as exc:  # noqa: BLE001
             self._controller = None
-            self._show_error("Could not start recording", str(exc))
+            self._show_error(_("Could not start recording"), str(exc))
             self._reset_idle_ui()
             return
 
         self._hint.set_visible(False)
         self._set_click_through(True)  # let clicks reach the app being recorded
-        self._controls.set_record_button("Stop", "destructive-action")
+        self._controls.set_record_button(_("Stop"), "destructive-action")
         self._controls.set_status("")
         self._start_timer()
 
@@ -356,10 +357,10 @@ class RecorderWindow(Adw.ApplicationWindow):
         self._controls.set_record_button(None, None, sensitive=False)
         self._controls.start_spinner()
         if self._settings.get("interface-open-editor-after-recording"):
-            self._controls.set_status("Processing…")
+            self._controls.set_status(_("Processing…"))
             thread = threading.Thread(target=self._editor_worker, daemon=True)
         else:
-            self._controls.set_status("Encoding…")
+            self._controls.set_status(_("Encoding…"))
             thread = threading.Thread(target=self._encode_worker, daemon=True)
         thread.start()
 
@@ -411,7 +412,7 @@ class RecorderWindow(Adw.ApplicationWindow):
 
     def _on_encode_failed(self, message: str) -> bool:
         self._controls.stop_spinner()
-        self._show_error("Encoding failed", message)
+        self._show_error(_("Encoding failed"), message)
         self._reset_idle_ui()
         return False
 
@@ -431,8 +432,10 @@ class RecorderWindow(Adw.ApplicationWindow):
 
         if detect_session() != SessionType.X11:
             raise RuntimeError(
-                "Region capture on this session needs the Wayland portal backend. "
-                "Run on X11 for now."
+                _(
+                    "Region capture on this session needs the Wayland portal "
+                    "backend. Run on X11 for now."
+                )
             )
 
         gi.require_version("GdkX11", "4.0")
@@ -497,11 +500,11 @@ class RecorderWindow(Adw.ApplicationWindow):
         ext = self.selected_format.file_extension
         default_name = time.strftime(f"{APP_NAME} %Y-%m-%d %H-%M") + f".{ext}"
         dialog = Gtk.FileChooserNative(
-            title="Save recording",
+            title=_("Save recording"),
             transient_for=self,
             action=Gtk.FileChooserAction.SAVE,
-            accept_label="_Save",
-            cancel_label="_Discard",
+            accept_label=_("_Save"),
+            cancel_label=_("_Discard"),
         )
         dialog.set_current_name(default_name)
         dialog.connect("response", self._on_save_response, output)
@@ -517,10 +520,10 @@ class RecorderWindow(Adw.ApplicationWindow):
                 dest = gfile.get_path()
                 shutil.move(str(output), dest)
                 self._notify_saved(Path(dest))
-                self._controls.set_status(f"Saved to {dest}")
+                self._controls.set_status(_("Saved to {path}").format(path=dest), sticky=True)
             else:
                 Path(output).unlink(missing_ok=True)
-                self._controls.set_status("Discarded")
+                self._controls.set_status(_("Discarded"))
         finally:
             dialog.destroy()
             self._save_dialog = None
@@ -532,7 +535,7 @@ class RecorderWindow(Adw.ApplicationWindow):
         app = self.get_application()
         if app is None:
             return
-        note = Gio.Notification.new("Recording saved")
+        note = Gio.Notification.new(_("Recording saved"))
         note.set_body(str(path))
         app.send_notification("gif-forge-saved", note)
 
@@ -542,7 +545,7 @@ class RecorderWindow(Adw.ApplicationWindow):
         self._stop_timer()
         self._set_click_through(False)
         self._hint.set_visible(True)
-        self._controls.set_record_button("Record", "suggested-action", sensitive=True)
+        self._controls.set_record_button(_("Record"), "suggested-action", sensitive=True)
         self._controls.reset_status_if_idle()
 
     def _show_error(self, title: str, detail: str) -> None:
@@ -573,8 +576,9 @@ class _ControlBar(Adw.ApplicationWindow):
         self._settings = recorder._settings
         self._syncing_size = False
         self._closing = False
+        self._status_sticky = False
 
-        self.set_title(f"{APP_NAME} — Controls")
+        self.set_title(f"{APP_NAME} — " + _("Controls"))
         self.set_resizable(False)
         self.set_default_size(420, -1)
 
@@ -592,11 +596,13 @@ class _ControlBar(Adw.ApplicationWindow):
         self._format_dropdown = Gtk.DropDown.new_from_strings(
             [fmt.value.upper() for fmt in OutputFormat]
         )
-        self._format_dropdown.set_tooltip_text("Output format")
+        self._format_dropdown.set_tooltip_text(_("Output format"))
         header.pack_start(self._format_dropdown)
 
         menu_button = Gtk.MenuButton(icon_name="open-menu-symbolic")
-        menu = Gtk.Builder.new_from_string(_MENU_XML, -1).get_object("primary-menu")
+        menu = Gio.Menu()
+        menu.append(_("Preferences"), "app.preferences")
+        menu.append(_("About GIF Forge"), "app.about")
         menu_button.set_menu_model(menu)
         header.pack_end(menu_button)
         root.append(header)
@@ -612,8 +618,8 @@ class _ControlBar(Adw.ApplicationWindow):
         # (no spin steppers) — applied on Enter or focus-out, clamped on apply.
         size_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
         size_box.set_valign(Gtk.Align.CENTER)
-        self._width_entry = self._make_size_entry("Recording width in pixels")
-        self._height_entry = self._make_size_entry("Recording height in pixels")
+        self._width_entry = self._make_size_entry(_("Recording width in pixels"))
+        self._height_entry = self._make_size_entry(_("Recording height in pixels"))
         times = Gtk.Label(label="×")
         times.add_css_class("dim-label")
         unit = Gtk.Label(label="px")
@@ -647,7 +653,7 @@ class _ControlBar(Adw.ApplicationWindow):
         self._timer_label.set_can_target(False)
         controls.append(self._timer_label)
 
-        self._record_button = Gtk.Button(label="Record")
+        self._record_button = Gtk.Button(label=_("Record"))
         self._record_button.add_css_class("suggested-action")
         self._record_button.connect("clicked", lambda *_: self._recorder.toggle_recording())
         controls.append(self._record_button)
@@ -719,11 +725,14 @@ class _ControlBar(Adw.ApplicationWindow):
             self._record_button.add_css_class(css)
         self._record_button.set_sensitive(sensitive)
 
-    def set_status(self, text: str) -> None:
+    def set_status(self, text: str, *, sticky: bool = False) -> None:
+        # `sticky` marks a message (e.g. "Saved to …") that should survive the
+        # idle reset, instead of fragile prefix-matching on a translated string.
+        self._status_sticky = sticky
         self._status_label.set_label(text)
 
     def reset_status_if_idle(self) -> None:
-        if not self._status_label.get_label().startswith("Saved"):
+        if not self._status_sticky:
             self._status_label.set_label("")
 
     def update_timer(self, text: str, *, visible: bool) -> None:
@@ -761,21 +770,3 @@ class _ControlBar(Adw.ApplicationWindow):
             self._closing = True
             self._recorder.close()
         return False
-
-
-_MENU_XML = """
-<interface>
-  <menu id="primary-menu">
-    <section>
-      <item>
-        <attribute name="label">Preferences</attribute>
-        <attribute name="action">app.preferences</attribute>
-      </item>
-      <item>
-        <attribute name="label">About GIF Forge</attribute>
-        <attribute name="action">app.about</attribute>
-      </item>
-    </section>
-  </menu>
-</interface>
-"""
