@@ -56,11 +56,12 @@
   <url type="bugtracker">https://github.com/elhombretecla/gif-forge/issues</url>
 
   <releases>
-    <release version="0.1.0" date="2026-05-29">
+    <release version="0.1.0" date="2026-06-01">
       <description>
-        <p>First development preview: Wayland-first recorder, timeline editor
-        with undo/redo, optimized GIF/WebM/APNG export, and editable projects
-        with crash recovery.</p>
+        <p>First release: Wayland-first recorder, timeline editor with undo/redo,
+        optimized GIF/WebM/APNG export, editable projects with crash recovery, a
+        localized UI (English/Spanish/French/German/Portuguese), and packages for
+        Flatpak, AppImage, .deb, Arch and Fedora.</p>
       </description>
     </release>
   </releases>
