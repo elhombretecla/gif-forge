@@ -52,13 +52,24 @@ def main():
             state["steps"].append(("select", win.current_index == 10))
             win.go_first()
             win.toggle_play()  # start playback from 0
-            return False
+            # Poll for advancement instead of asserting at a fixed instant: under
+            # CI load the per-frame play timer can tick late, which made a
+            # fixed-time check flaky. Pass as soon as the frame advances; only
+            # fail if it never advances within a generous window.
+            poll = {"ticks": 0}
 
-        def step3():
-            print("during playback, current:", win.current_index)
-            state["steps"].append(("playback-advanced", win.current_index > 0))
-            win.toggle_play()  # pause
-            step4()
+            def poll_playback():
+                poll["ticks"] += 1
+                advanced = win.current_index > 0
+                if advanced or poll["ticks"] >= 60:  # ~3s at 50ms intervals
+                    print("during playback, current:", win.current_index)
+                    state["steps"].append(("playback-advanced", advanced))
+                    win.toggle_play()  # pause
+                    step4()
+                    return False
+                return True
+
+            GLib.timeout_add(50, poll_playback)
             return False
 
         def step4():
@@ -87,7 +98,6 @@ def main():
 
         GLib.timeout_add(700, step1)
         GLib.timeout_add(1100, step2)
-        GLib.timeout_add(1800, step3)
 
     app.connect_after("activate", on_activate)
     GLib.timeout_add_seconds(20, app.quit)
