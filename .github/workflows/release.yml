@@ -72,7 +72,7 @@ jobs:
             wget file desktop-file-utils
 
       - name: Build AppImage
-        run: sh packaging/appimage/build-appimage.sh
+        run: bash packaging/appimage/build-appimage.sh
 
       - uses: actions/upload-artifact@v4
         with:

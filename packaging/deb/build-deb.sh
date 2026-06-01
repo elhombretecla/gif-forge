@@ -15,8 +15,13 @@ ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$ROOT"
 
 VERSION="${1:-}"
+# Only derive the version from the ref when it's a version tag (vX.Y.Z). On a
+# workflow_dispatch from a branch, GITHUB_REF_NAME is the branch name (e.g.
+# "main"), which is not a valid package version — fall back to debian/changelog.
 if [ -z "$VERSION" ] && [ -n "${GITHUB_REF_NAME:-}" ]; then
-  VERSION="${GITHUB_REF_NAME#v}"
+  case "$GITHUB_REF_NAME" in
+    v[0-9]*) VERSION="${GITHUB_REF_NAME#v}" ;;
+  esac
 fi
 
 if [ -n "$VERSION" ]; then
