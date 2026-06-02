@@ -56,6 +56,14 @@
   <url type="bugtracker">https://github.com/elhombretecla/gif-forge/issues</url>
 
   <releases>
+    <release version="0.1.1" date="2026-06-02">
+      <description>
+        <p>Fixes the capture region showing as opaque grey — and recording a
+        single frozen frame — on X11 sessions without a compositor. The region
+        is now a real see-through hole, so the desktop shows through with or
+        without compositing.</p>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-06-01">
       <description>
         <p>First release: Wayland-first recorder, timeline editor with undo/redo,

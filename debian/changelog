@@ -1,3 +1,11 @@
+gif-forge (0.1.1) unstable; urgency=medium
+
+  * Fix the capture region rendering as opaque grey — and recording a single
+    frozen frame — on X11 sessions without a compositor, by punching a real
+    XShape hole over the capture area so the desktop shows through.
+
+ -- Juan de la Cruz García <delacruzgarciajuan@gmail.com>  Tue, 02 Jun 2026 09:58:07 +0200
+
 gif-forge (0.1.0) unstable; urgency=medium
 
   * Initial Debian packaging.

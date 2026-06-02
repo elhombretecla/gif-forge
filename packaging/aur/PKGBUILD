@@ -1,6 +1,6 @@
 # Maintainer: Juan de la Cruz García <delacruzgarciajuan@gmail.com>
 pkgname=gif-forge
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc="Modern Linux screen recorder and GIF/video editor (GTK4/Libadwaita)"
 arch=('any')

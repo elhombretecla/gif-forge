@@ -8,6 +8,6 @@ Wayland or X11, edit the result on a timeline, and export an optimized GIF,
 WebM or APNG. It began as a ground-up rewrite of the deprecated Vala/GTK3 Peek.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 APP_ID = "io.github.elhombretecla.GifForge"
 APP_NAME = "GIF Forge"
