@@ -20,7 +20,7 @@ jobs:
     name: Build .deb
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install build dependencies
         run: |
@@ -46,7 +46,7 @@ jobs:
           mkdir -p dist
           cp ../gif-forge_*_all.deb dist/
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: deb
           path: dist/*.deb
@@ -59,7 +59,7 @@ jobs:
     # release if it breaks.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install bundling dependencies
         run: |
@@ -81,7 +81,7 @@ jobs:
       - name: Build AppImage
         run: bash packaging/appimage/build-appimage.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: appimage
           path: dist/*.AppImage
@@ -93,13 +93,13 @@ jobs:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
       options: --privileged
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: gif-forge.flatpak
           manifest-path: build-aux/flatpak/io.github.elhombretecla.GifForge.yml
           cache-key: flatpak-builder-${{ github.sha }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: flatpak
           path: gif-forge.flatpak
@@ -111,7 +111,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
 
@@ -125,7 +125,7 @@ jobs:
           ls -l
 
       - name: Attach to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: release/*
           fail_on_unmatched_files: false
