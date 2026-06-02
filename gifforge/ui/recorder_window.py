@@ -45,6 +45,12 @@ log = logging.getLogger(__name__)
 # split into their own window the only floor we keep is a sane usable minimum.
 _MIN_CAPTURE = 32
 
+# Width (logical px) of the accent frame around the capture hole. Must match the
+# `.capture-area` inset box-shadow below: the XShape hole is inset by this much
+# so the coloured frame lands on real window pixels (never inside the recorded,
+# see-through region).
+_BORDER = 2
+
 _CSS = b"""
 .gifforge-recorder.background { background-color: transparent; }
 .gifforge-recorder headerbar {
@@ -57,7 +63,7 @@ _CSS = b"""
   background-color: transparent;
   box-shadow: inset 0 0 0 2px alpha(@accent_color, 0.8);
 }
-.countdown-label { font-size: 64px; font-weight: bold; }
+.recorder-hint { padding: 0 12px 8px; }
 .recording-timer {
   font-size: 20px;
   font-weight: bold;
@@ -90,6 +96,7 @@ class RecorderWindow(Adw.ApplicationWindow):
         self._save_dialog: Optional[Gtk.FileChooserNative] = None
         self._syncing_size = False  # guard against control<->capture-area feedback
         self._closing = False
+        self._hole_active = False  # XShape bounding hole punched over the capture area
 
         self._install_css()
         self._build_ui()
@@ -121,32 +128,16 @@ class RecorderWindow(Adw.ApplicationWindow):
         header.set_title_widget(Gtk.Label())
         root.append(header)
 
-        # Transparent capture region (a DrawingArea so we get a `resize` signal
-        # to keep the size inputs in sync), with hint + countdown overlays.
-        overlay = Gtk.Overlay(vexpand=True)
+        # The capture region: a DrawingArea (for its `resize` signal) that is
+        # punched into a real see-through hole via XShape. Nothing is painted
+        # *inside* it — the desktop shows through, compositor or not. Transient
+        # text (idle hint, countdown) lives in the control bar instead, since
+        # anything drawn over the hole would be shaped away.
         self._capture_area = Gtk.DrawingArea(hexpand=True, vexpand=True)
         self._capture_area.set_size_request(_MIN_CAPTURE, _MIN_CAPTURE)
         self._capture_area.add_css_class("capture-area")
         self._capture_area.connect("resize", self._on_capture_resize)
-        overlay.set_child(self._capture_area)
-
-        self._hint = Gtk.Label(label=_("Drag over what you want to capture"))
-        self._hint.add_css_class("dim-label")
-        self._hint.set_halign(Gtk.Align.CENTER)
-        self._hint.set_valign(Gtk.Align.CENTER)
-        self._hint.set_wrap(True)
-        self._hint.set_justify(Gtk.Justification.CENTER)
-        self._hint.set_can_target(False)
-        overlay.add_overlay(self._hint)
-
-        self._countdown_label = Gtk.Label(label="")
-        self._countdown_label.add_css_class("countdown-label")
-        self._countdown_label.set_halign(Gtk.Align.CENTER)
-        self._countdown_label.set_valign(Gtk.Align.CENTER)
-        self._countdown_label.set_visible(False)
-        self._countdown_label.set_can_target(False)
-        overlay.add_overlay(self._countdown_label)
-        root.append(overlay)
+        root.append(self._capture_area)
 
         self.set_content(root)
 
@@ -196,6 +187,9 @@ class RecorderWindow(Adw.ApplicationWindow):
         """Capture area was resized: reflect its pixel size in the inputs."""
         scale = self._scale_factor()
         self._controls.set_size_inputs(width * scale, height * scale)
+        # The bounding hole is window-relative, so it must track the new size.
+        if self._hole_active:
+            self._set_capture_hole(True)
 
     # --- window lifecycle ----------------------------------------------------
 
@@ -218,6 +212,11 @@ class RecorderWindow(Adw.ApplicationWindow):
         except Exception as exc:  # noqa: BLE001
             log.debug("keep-above failed: %s", exc)
 
+        # Punch the see-through hole right away so the capture area shows the
+        # desktop even on desktops without a compositor (where ARGB alpha would
+        # otherwise render as an opaque background).
+        self._set_capture_hole(True)
+
     def _on_close_request(self, *_args) -> bool:
         """Closing the frame tears down the control bar too."""
         if not self._closing:
@@ -225,14 +224,72 @@ class RecorderWindow(Adw.ApplicationWindow):
             self._controls.close()
         return False
 
+    def _capture_hole(self) -> Optional[tuple[int, int, int, int]]:
+        """The capture region as an (x, y, w, h) rect in window-relative device px.
+
+        Inset by :data:`_BORDER` on every side so the coloured frame sits on
+        real window pixels around the hole, never inside the recorded region.
+        Returns ``None`` until the surface and allocation are available.
+        """
+        native = self.get_native()
+        surface = native.get_surface() if native else None
+        if native is None or surface is None:
+            return None
+        ok, rect = self._capture_area.compute_bounds(self)
+        if not ok:
+            return None
+        # Widget coords (logical) -> surface coords (add the CSD-shadow
+        # transform) -> device pixels (×scale), which is what X expects.
+        tx, ty = native.get_surface_transform()
+        scale = surface.get_scale_factor()
+        b = int(round(_BORDER * scale))
+        x = int(round((rect.get_x() + tx) * scale)) + b
+        y = int(round((rect.get_y() + ty) * scale)) + b
+        w = int(round(rect.get_width() * scale)) - 2 * b
+        h = int(round(rect.get_height() * scale)) - 2 * b
+        if w <= 0 or h <= 0:
+            return None
+        return (x, y, w, h)
+
+    def _set_capture_hole(self, active: bool) -> None:
+        """Punch (or clear) the XShape bounding hole over the capture area.
+
+        With the hole in place the desktop shows through the capture region and
+        clicks fall through to it — both honoured by the X server itself, so it
+        works with or without a compositor. Cleared briefly during the countdown
+        so the big number is visible over a solid area.
+        """
+        self._hole_active = active
+        from ..capture import detect_session
+        from ..capture.factory import SessionType
+
+        if detect_session() != SessionType.X11:
+            return
+        native = self.get_native()
+        surface = native.get_surface() if native else None
+        if surface is None:
+            return
+        try:
+            from ..platform.x11_window import clear_bounding_hole, set_bounding_hole
+
+            xid = surface.get_xid()
+            hole = self._capture_hole() if active else None
+            if hole is None:
+                clear_bounding_hole(xid)
+            else:
+                set_bounding_hole(xid, hole)
+        except Exception as exc:  # noqa: BLE001 - never block on a cosmetic shape
+            log.debug("capture-hole toggle failed: %s", exc)
+
     def _set_click_through(self, enabled: bool) -> None:
         """Toggle click-through over the capture hole.
 
-        While recording (*enabled*), clicks over the transparent capture area
-        pass through to the windows behind; only the header strip stays
-        interactive, so the frame can still be dragged. The control bar is a
-        separate window and remains fully usable (Stop lives there). When idle
-        the whole frame is interactive again.
+        While recording (*enabled*), clicks over the capture area pass through to
+        the windows behind; only the frame chrome stays interactive, so the
+        window can still be dragged. The control bar is a separate window and
+        remains fully usable (Stop lives there). When idle the whole frame is
+        interactive again. (The bounding hole already passes the interior
+        through; this keeps input correct on compositing desktops too.)
         """
         from ..capture import detect_session
         from ..capture.factory import SessionType
@@ -253,19 +310,9 @@ class RecorderWindow(Adw.ApplicationWindow):
             if not enabled:
                 clear_input_passthrough(xid)
                 return
-            ok, rect = self._capture_area.compute_bounds(self)
-            if not ok:
+            hole = self._capture_hole()
+            if hole is None:
                 return
-            # Widget coords (logical) -> surface coords (add the CSD-shadow
-            # transform) -> device pixels (×scale), which is what X expects.
-            tx, ty = native.get_surface_transform()
-            scale = surface.get_scale_factor()
-            hole = (
-                int(round((rect.get_x() + tx) * scale)),
-                int(round((rect.get_y() + ty) * scale)),
-                int(round(rect.get_width() * scale)),
-                int(round(rect.get_height() * scale)),
-            )
             set_input_passthrough(xid, hole)
         except Exception as exc:  # noqa: BLE001 - never block recording on this
             log.debug("click-through toggle failed: %s", exc)
@@ -288,18 +335,21 @@ class RecorderWindow(Adw.ApplicationWindow):
             self._start_recording()
             return
         self._remaining = delay
-        self._countdown_label.set_visible(True)
-        self._countdown_label.set_label(str(self._remaining))
+        # The countdown shows in the control bar, never over the capture region:
+        # the hole stays punched the whole time so it can't briefly cover (and
+        # then record) an opaque area on compositor-less desktops.
+        self._controls.set_hint_visible(False)
+        self._controls.set_countdown(self._remaining)
         self._countdown_source = GLib.timeout_add_seconds(1, self._on_countdown_tick)
 
     def _on_countdown_tick(self) -> bool:
         self._remaining -= 1
         if self._remaining <= 0:
             self._countdown_source = 0
-            self._countdown_label.set_visible(False)
+            self._controls.set_countdown(None)
             self._start_recording()
             return False
-        self._countdown_label.set_label(str(self._remaining))
+        self._controls.set_countdown(self._remaining)
         return True
 
     # --- elapsed-time counter ------------------------------------------------
@@ -325,7 +375,7 @@ class RecorderWindow(Adw.ApplicationWindow):
         if self._countdown_source:
             GLib.source_remove(self._countdown_source)
             self._countdown_source = 0
-        self._countdown_label.set_visible(False)
+        self._controls.set_countdown(None)
         self._reset_idle_ui()
 
     def _start_recording(self) -> None:
@@ -345,7 +395,10 @@ class RecorderWindow(Adw.ApplicationWindow):
             self._reset_idle_ui()
             return
 
-        self._hint.set_visible(False)
+        self._controls.set_hint_visible(False)
+        # The hole was punched on map and stays punched; we deliberately do not
+        # reshape it here, so the region is never momentarily opaque at the exact
+        # instant capture starts.
         self._set_click_through(True)  # let clicks reach the app being recorded
         self._controls.set_record_button(_("Stop"), "destructive-action")
         self._controls.set_status("")
@@ -457,17 +510,21 @@ class RecorderWindow(Adw.ApplicationWindow):
         # Add the frame extents to get the true content origin.
         frame_left, _fr, frame_top, _fb = get_frame_extents(xid)
 
-        # Capture-area offset within the window (logical px -> device px).
+        # Capture-area offset within the window (logical px -> device px). The
+        # recorded rectangle matches the see-through hole, which is inset by the
+        # accent frame (_BORDER) on every side so the frame is never recorded.
+        b = int(round(_BORDER * scale))
         ok, rect = self._capture_area.compute_bounds(self)
-        off_x = int(round(rect.get_x() * scale)) if ok else 0
-        off_y = int(round(rect.get_y() * scale)) if ok else 0
+        off_x = (int(round(rect.get_x() * scale)) if ok else 0) + b
+        off_y = (int(round(rect.get_y() * scale)) if ok else 0) + b
         left = origin_x + frame_left + off_x
         top = origin_y + frame_top + off_y
 
-        # Size tracks the actual capture area (WYSIWYG); the inputs stay in sync
-        # with it. Falls back to the input values if not yet allocated.
-        width = self._capture_area.get_width() * scale or self._controls.input_width()
-        height = self._capture_area.get_height() * scale or self._controls.input_height()
+        # Size tracks the actual capture area minus the frame (WYSIWYG); the
+        # inputs stay in sync with it. Falls back to the input values if not yet
+        # allocated.
+        width = (self._capture_area.get_width() * scale or self._controls.input_width()) - 2 * b
+        height = (self._capture_area.get_height() * scale or self._controls.input_height()) - 2 * b
 
         # Clip to the visible screen, all in device pixels.
         screen_w, screen_h = self._virtual_screen_size()
@@ -544,7 +601,9 @@ class RecorderWindow(Adw.ApplicationWindow):
     def _reset_idle_ui(self) -> None:
         self._stop_timer()
         self._set_click_through(False)
-        self._hint.set_visible(True)
+        # The bounding hole stays punched throughout, so there is nothing to
+        # restore here — the capture region is see-through from map to close.
+        self._controls.set_hint_visible(True)
         self._controls.set_record_button(_("Record"), "suggested-action", sensitive=True)
         self._controls.reset_status_if_idle()
 
@@ -608,6 +667,17 @@ class _ControlBar(Adw.ApplicationWindow):
         root.append(header)
 
         root.append(self._build_control_row())
+
+        # The idle hint lives here (not over the capture region, which is a
+        # see-through hole). Hidden while counting down or recording.
+        self._hint_label = Gtk.Label(label=_("Drag the frame over what you want to capture"))
+        self._hint_label.add_css_class("dim-label")
+        self._hint_label.add_css_class("recorder-hint")
+        self._hint_label.set_wrap(True)
+        self._hint_label.set_justify(Gtk.Justification.CENTER)
+        self._hint_label.set_xalign(0.5)
+        root.append(self._hint_label)
+
         self.set_content(root)
 
     def _build_control_row(self) -> Gtk.Box:
@@ -738,6 +808,21 @@ class _ControlBar(Adw.ApplicationWindow):
     def update_timer(self, text: str, *, visible: bool) -> None:
         self._timer_label.set_label(text)
         self._timer_label.set_visible(visible)
+
+    def set_hint_visible(self, visible: bool) -> None:
+        self._hint_label.set_visible(visible)
+
+    def set_countdown(self, value: Optional[int]) -> None:
+        """Show the pre-recording countdown in the timer slot (None hides it).
+
+        Lives in the control bar so the capture region's see-through hole is
+        never covered — drawing over the hole would be shaped away anyway.
+        """
+        if value is None:
+            self._timer_label.set_visible(False)
+            return
+        self._timer_label.set_label(str(value))
+        self._timer_label.set_visible(True)
 
     def start_spinner(self) -> None:
         self._spinner.start()

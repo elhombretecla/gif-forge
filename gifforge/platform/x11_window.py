@@ -56,6 +56,7 @@ def _open():
 
 # --- XShape input passthrough -------------------------------------------------
 
+_SHAPE_BOUNDING = 0
 _SHAPE_INPUT = 2
 _SHAPE_SET = 0
 _SHAPE_SUBTRACT = 3
@@ -144,6 +145,68 @@ def clear_input_passthrough(xid: int) -> None:
         x.XFlush(dpy)
     except Exception as exc:  # pragma: no cover - env dependent
         log.debug("clear_input_passthrough failed: %s", exc)
+    finally:
+        x.XCloseDisplay(dpy)
+
+
+# --- XShape bounding hole (compositor-free transparency) ----------------------
+
+
+def set_bounding_hole(xid: int, hole: Tuple[int, int, int, int]) -> None:
+    """Cut a real hole in the window's *bounding* shape over *hole*.
+
+    Unlike ARGB transparency, the bounding shape is honoured by the X server
+    itself, so the desktop shows through the rectangle *without* a compositing
+    manager. The chrome around the hole keeps its pixels (and its input), while
+    the hole region renders — and clicks — straight through to whatever is
+    behind. *hole* is (x, y, w, h) in device px, relative to the window origin.
+    """
+    try:
+        x, dpy = _open()
+    except Exception as exc:  # pragma: no cover - env dependent
+        log.debug("bounding hole: %s", exc)
+        return
+    try:
+        ext = _xshape()
+        ext.XShapeCombineRectangles.argtypes = [
+            ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+            ctypes.POINTER(_XRectangle), ctypes.c_int, ctypes.c_int, ctypes.c_int,
+        ]
+        gw, gh = _window_size(x, dpy, xid)
+        full = (_XRectangle * 1)(_XRectangle(0, 0, gw, gh))
+        ext.XShapeCombineRectangles(dpy, ctypes.c_ulong(xid), _SHAPE_BOUNDING, 0, 0,
+                                    full, 1, _SHAPE_SET, _SHAPE_UNSORTED)
+        hx, hy, hw, hh = hole
+        rect = (_XRectangle * 1)(_XRectangle(hx, hy, hw, hh))
+        ext.XShapeCombineRectangles(dpy, ctypes.c_ulong(xid), _SHAPE_BOUNDING, 0, 0,
+                                    rect, 1, _SHAPE_SUBTRACT, _SHAPE_UNSORTED)
+        x.XFlush.argtypes = [ctypes.c_void_p]
+        x.XFlush(dpy)
+    except Exception as exc:  # pragma: no cover - env dependent
+        log.debug("set_bounding_hole failed: %s", exc)
+    finally:
+        x.XCloseDisplay(dpy)
+
+
+def clear_bounding_hole(xid: int) -> None:
+    """Restore the whole window as drawn (undo :func:`set_bounding_hole`)."""
+    try:
+        x, dpy = _open()
+    except Exception as exc:  # pragma: no cover - env dependent
+        log.debug("clear bounding hole: %s", exc)
+        return
+    try:
+        ext = _xshape()
+        ext.XShapeCombineMask.argtypes = [
+            ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int,
+            ctypes.c_int, ctypes.c_int, ctypes.c_ulong, ctypes.c_int,
+        ]
+        # A None (0) mask means "no bounding shape" -> the whole window is drawn.
+        ext.XShapeCombineMask(dpy, ctypes.c_ulong(xid), _SHAPE_BOUNDING, 0, 0, 0, _SHAPE_SET)
+        x.XFlush.argtypes = [ctypes.c_void_p]
+        x.XFlush(dpy)
+    except Exception as exc:  # pragma: no cover - env dependent
+        log.debug("clear_bounding_hole failed: %s", exc)
     finally:
         x.XCloseDisplay(dpy)
 
