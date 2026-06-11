@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import threading
 from pathlib import Path
-from typing import List
+from typing import List, Sequence
 
 from ..models import OutputFormat
 from ..utils import create_temp_file
@@ -36,12 +36,30 @@ PALETTEUSE = "paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle"
 # --- pure argv builders (unit-testable) --------------------------------------
 
 
-def build_palette_argv(input_path: Path, fps: int, palette_path: Path) -> List[str]:
+def drop_frames_prefix(drop_frames: Sequence[int] | None) -> str:
+    """Filter-chain prefix removing capture glitch frames (see frames/deglitch).
+
+    ``select`` keeps the surviving frames' timestamps, so the ``fps`` filter
+    that follows fills each hole by repeating the previous good frame — the
+    glitch is replaced rather than shortening the clip.
+    """
+    if not drop_frames:
+        return ""
+    terms = "+".join(f"eq(n,{i})" for i in sorted(drop_frames))
+    return f"select='not({terms})',"
+
+
+def build_palette_argv(
+    input_path: Path,
+    fps: int,
+    palette_path: Path,
+    drop_frames: Sequence[int] | None = None,
+) -> List[str]:
     """ffmpeg pass 1: generate an optimized palette for the GIF."""
     return [
         *FFMPEG_BASE,
         "-i", str(input_path),
-        "-vf", f"fps={fps},{PALETTEGEN}",
+        "-vf", f"{drop_frames_prefix(drop_frames)}fps={fps},{PALETTEGEN}",
         str(palette_path),
     ]
 
@@ -51,24 +69,30 @@ def build_animation_argv(
     palette_path: Path,
     fps: int,
     output_path: Path,
+    drop_frames: Sequence[int] | None = None,
 ) -> List[str]:
     """ffmpeg pass 2: apply the palette to produce the final GIF."""
     return [
         *FFMPEG_BASE,
         "-i", str(input_path),
         "-i", str(palette_path),
-        "-filter_complex", f"fps={fps},{PALETTEUSE}",
+        "-filter_complex", f"{drop_frames_prefix(drop_frames)}fps={fps},{PALETTEUSE}",
         str(output_path),
     ]
 
 
-def build_apng_argv(input_path: Path, fps: int, output_path: Path) -> List[str]:
+def build_apng_argv(
+    input_path: Path,
+    fps: int,
+    output_path: Path,
+    drop_frames: Sequence[int] | None = None,
+) -> List[str]:
     """Encode APNG directly: it is true-colour, so a 256-colour palette pass
     would only degrade it."""
     return [
         *FFMPEG_BASE,
         "-i", str(input_path),
-        "-vf", f"fps={fps}",
+        "-vf", f"{drop_frames_prefix(drop_frames)}fps={fps}",
         "-f", "apng",
         "-plays", "0",  # loop forever, matching Peek
         str(output_path),
@@ -103,17 +127,19 @@ def encode_gif(
     input_path: Path,
     fps: int,
     *,
+    drop_frames: Sequence[int] | None = None,
     cancel_event: threading.Event | None = None,
 ) -> Path:
     """Two-pass GIF encode. Returns the output file path."""
     palette = create_temp_file("png")
     try:
         run_command(
-            build_palette_argv(input_path, fps, palette), cancel_event=cancel_event
+            build_palette_argv(input_path, fps, palette, drop_frames),
+            cancel_event=cancel_event,
         )
         output = create_temp_file(OutputFormat.GIF.file_extension)
         run_command(
-            build_animation_argv(input_path, palette, fps, output),
+            build_animation_argv(input_path, palette, fps, output, drop_frames),
             cancel_event=cancel_event,
         )
         return output
@@ -125,10 +151,13 @@ def encode_apng(
     input_path: Path,
     fps: int,
     *,
+    drop_frames: Sequence[int] | None = None,
     cancel_event: threading.Event | None = None,
 ) -> Path:
     output = create_temp_file(OutputFormat.APNG.file_extension)
-    run_command(build_apng_argv(input_path, fps, output), cancel_event=cancel_event)
+    run_command(
+        build_apng_argv(input_path, fps, output, drop_frames), cancel_event=cancel_event
+    )
     return output
 
 

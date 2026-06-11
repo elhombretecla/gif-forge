@@ -11,9 +11,11 @@ re-encode; APNG via ffmpeg 2-pass.
 from __future__ import annotations
 
 import logging
+import shutil
 import threading
 from pathlib import Path
 
+from ..frames.deglitch import find_capture_glitches
 from ..models import OutputFormat, RecordingConfig
 from . import ffmpeg, gifski
 
@@ -40,14 +42,23 @@ def encode_recording(
     if fmt == OutputFormat.WEBM:
         return ffmpeg.encode_webm(input_path, fps, cancel_event=cancel_event)
 
+    # GIF and APNG re-encode the intermediate frame by frame, so capture
+    # glitches (frames/deglitch.py) can be repaired on the way through.
+    glitches = find_capture_glitches(input_path, cancel_event=cancel_event)
+
     if fmt == OutputFormat.APNG:
         log.debug("encoding APNG directly (true colour, no palette)")
-        return ffmpeg.encode_apng(input_path, fps, cancel_event=cancel_event)
+        return ffmpeg.encode_apng(
+            input_path, fps, drop_frames=glitches, cancel_event=cancel_event
+        )
 
     if config.gifski_enabled and gifski.is_available():
         frames = ffmpeg.extract_frames(input_path, cancel_event=cancel_event)
         try:
             if gifski.frames_within_argv_limit(frames):
+                for i in glitches:
+                    if i < len(frames):
+                        shutil.copyfile(frames[i - 1] if i > 0 else frames[i + 1], frames[i])
                 log.debug("encoding GIF via gifski (%d frames)", len(frames))
                 return gifski.encode_gif(
                     frames, fps, config.gifski_quality, cancel_event=cancel_event
@@ -61,4 +72,6 @@ def encode_recording(
                 frame.unlink(missing_ok=True)
 
     log.debug("encoding GIF via ffmpeg 2-pass")
-    return ffmpeg.encode_gif(input_path, fps, cancel_event=cancel_event)
+    return ffmpeg.encode_gif(
+        input_path, fps, drop_frames=glitches, cancel_event=cancel_event
+    )
