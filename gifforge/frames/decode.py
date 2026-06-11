@@ -19,6 +19,7 @@ from pathlib import Path
 from ..encode.ffmpeg import FFMPEG_BASE
 from ..encode.runner import run_command
 from ..project.cache import SessionCache
+from .deglitch import find_capture_glitches
 from .model import Frame, FrameList
 
 log = logging.getLogger(__name__)
@@ -43,6 +44,14 @@ def decode_to_frames(
     files = cache.list_frames()
     if not files:
         raise RuntimeError("no frames were decoded from the recording")
+
+    # Repair capture glitches (see frames/deglitch.py) by pointing each glitch
+    # frame at its predecessor's PNG — frames sharing a path is the same
+    # convention duplicated frames use, so the editor handles it natively.
+    for i in find_capture_glitches(
+        input_path, expected_frames=len(files), cancel_event=cancel_event
+    ):
+        files[i] = files[i - 1] if i > 0 else files[i + 1]
 
     delay_ms = round(1000 / fps)
     frames = FrameList(

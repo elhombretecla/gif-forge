@@ -23,6 +23,7 @@ from ..models import OutputFormat
 from ..utils import create_temp_file
 from .errors import EncodeError
 from .ffmpeg import FFMPEG_BASE, PALETTEUSE
+from .gif_timing import delays_centiseconds, rewrite_gif_delays
 from .runner import run_command
 
 
@@ -140,6 +141,12 @@ def export_frames(
                         loop=loop, final_delay_cs=final_delay_centiseconds(frames),
                     ),
                     cancel_event=cancel_event,
+                )
+                # The concat demuxer quantizes durations to its 1/25s timebase
+                # (100 ms → alternating 120/80 ms); patch the exact delays in.
+                rewrite_gif_delays(
+                    output_path,
+                    delays_centiseconds([f.delay_ms for f in frames]),
                 )
             finally:
                 palette.unlink(missing_ok=True)

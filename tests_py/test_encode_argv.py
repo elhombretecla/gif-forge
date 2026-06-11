@@ -60,6 +60,29 @@ def test_webm_argv():
     assert argv[argv.index("-r") + 1] == "24"
 
 
+def test_drop_frames_prefix_empty():
+    assert ffmpeg.drop_frames_prefix(None) == ""
+    assert ffmpeg.drop_frames_prefix([]) == ""
+
+
+def test_drop_frames_prefix_selects_out_glitches():
+    # The select must come BEFORE fps so the indices match the source frames
+    # and fps refills each hole by repeating the previous good frame.
+    argv = ffmpeg.build_palette_argv(Path("/in.webm"), 10, Path("/pal.png"), [7, 3])
+    vf = argv[argv.index("-vf") + 1]
+    assert vf == "select='not(eq(n,3)+eq(n,7))',fps=10,palettegen=stats_mode=diff"
+
+    argv = ffmpeg.build_animation_argv(
+        Path("/in.webm"), Path("/pal.png"), 10, Path("/out.gif"), [3]
+    )
+    fc = argv[argv.index("-filter_complex") + 1]
+    assert fc.startswith("select='not(eq(n,3))',fps=10,paletteuse=")
+
+    argv = ffmpeg.build_apng_argv(Path("/in.webm"), 15, Path("/out.apng"), [0])
+    vf = argv[argv.index("-vf") + 1]
+    assert vf == "select='not(eq(n,0))',fps=15"
+
+
 def test_gifski_argv_appends_frames():
     frames = [Path("/f.0001.png"), Path("/f.0002.png")]
     argv = gifski.build_gifski_argv(frames, 12, 80, Path("/out.gif"))
