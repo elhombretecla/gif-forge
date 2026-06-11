@@ -145,7 +145,7 @@ class TrimFrames(Command):
 
 
 def _file_hash(path: Path) -> str:
-    return hashlib.md5(Path(path).read_bytes()).hexdigest()
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
 class RemoveDuplicates(Command):
@@ -156,8 +156,14 @@ class RemoveDuplicates(Command):
     def apply(self, frames: FrameList) -> None:
         merged: List = []
         prev_hash = None
+        # Duplicated frames share their source PNG; hash each path once instead
+        # of re-reading the file for every occurrence.
+        hashes: dict[str, str] = {}
         for frame in frames.to_list():
-            digest = _file_hash(frame.path)
+            key = str(frame.path)
+            digest = hashes.get(key)
+            if digest is None:
+                digest = hashes[key] = _file_hash(frame.path)
             if digest == prev_hash and merged:
                 merged[-1].delay_ms += frame.delay_ms
             else:

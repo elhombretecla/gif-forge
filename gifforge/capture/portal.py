@@ -27,8 +27,8 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import Any
 from pathlib import Path
-from typing import Optional
 
 import gi
 
@@ -85,11 +85,16 @@ def _gst():
 class PortalRecorder(CaptureBackend):
     def __init__(self, config: RecordingConfig) -> None:
         super().__init__(config)
-        self._conn: Optional[Gio.DBusConnection] = None
+        self._conn: Gio.DBusConnection | None = None
         self._sender: str = ""
-        self._session_handle: Optional[str] = None
-        self._pipeline = None
+        self._session_handle: str | None = None
+        self._pipeline: Any = None
         self._fd: int = -1
+
+    def _connection(self) -> Gio.DBusConnection:
+        if self._conn is None:
+            raise RecordingError("portal session not initialised")
+        return self._conn
 
     # --- availability --------------------------------------------------------
 
@@ -157,11 +162,18 @@ class PortalRecorder(CaptureBackend):
         # Flush the muxer so the WebM is finalised.
         self._pipeline.send_event(Gst.Event.new_eos())
         bus = self._pipeline.get_bus()
-        bus.timed_pop_filtered(
+        msg = bus.timed_pop_filtered(
             10 * Gst.SECOND, Gst.MessageType.EOS | Gst.MessageType.ERROR
         )
         self._teardown_pipeline()
         self._close_session()
+        if msg is not None and msg.type == Gst.MessageType.ERROR:
+            gerror, debug = msg.parse_error()
+            log.error("gstreamer error on stop: %s (%s)", gerror.message, debug)
+            self.state = CaptureState.FAILED
+            raise RecordingError(f"capture pipeline failed: {gerror.message}")
+        if msg is None:
+            log.warning("timed out waiting for EOS; the recording may be truncated")
         self.state = CaptureState.DONE
         return self.temp_file
 
@@ -200,19 +212,20 @@ class PortalRecorder(CaptureBackend):
             loop.quit()
             return False
 
-        sub_id = self._conn.signal_subscribe(
+        conn = self._connection()
+        sub_id = conn.signal_subscribe(
             PORTAL_BUS, REQUEST_IFACE, "Response", request_path, None,
             Gio.DBusSignalFlags.NONE, on_response,
         )
         timeout_id = GLib.timeout_add_seconds(timeout_seconds, on_timeout)
         try:
-            self._conn.call_sync(
+            conn.call_sync(
                 PORTAL_BUS, PORTAL_PATH, SCREENCAST_IFACE, method, params,
                 GLib.VariantType("(o)"), Gio.DBusCallFlags.NONE, -1, None,
             )
             loop.run()
         finally:
-            self._conn.signal_unsubscribe(sub_id)
+            conn.signal_unsubscribe(sub_id)
             GLib.source_remove(timeout_id)
 
         if out.get("timeout"):
@@ -237,6 +250,37 @@ class PortalRecorder(CaptureBackend):
             raise RecordingError("portal did not return a session handle")
         return handle
 
+    def _screencast_version(self) -> int:
+        try:
+            reply = self._connection().call_sync(
+                PORTAL_BUS, PORTAL_PATH, "org.freedesktop.DBus.Properties", "Get",
+                GLib.Variant("(ss)", (SCREENCAST_IFACE, "version")),
+                GLib.VariantType("(v)"), Gio.DBusCallFlags.NONE, 2000, None,
+            )
+            return int(reply.unpack()[0])
+        except Exception as exc:  # pragma: no cover - env dependent
+            log.debug("could not read ScreenCast version: %s", exc)
+            return 0
+
+    @staticmethod
+    def _load_restore_token() -> str:
+        try:
+            from ..settings import get_settings
+
+            return get_settings().get("persist-portal-restore-token") or ""
+        except Exception as exc:  # pragma: no cover - env dependent
+            log.debug("could not load restore token: %s", exc)
+            return ""
+
+    @staticmethod
+    def _save_restore_token(token: str) -> None:
+        try:
+            from ..settings import get_settings
+
+            get_settings().set("persist-portal-restore-token", token)
+        except Exception as exc:  # pragma: no cover - env dependent
+            log.debug("could not persist restore token: %s", exc)
+
     def _select_sources(self) -> None:
         cursor = CURSOR_EMBEDDED if self.config.capture_mouse else CURSOR_HIDDEN
         handle_token = _next_token("selectsources")
@@ -246,6 +290,13 @@ class PortalRecorder(CaptureBackend):
             "multiple": GLib.Variant("b", False),
             "cursor_mode": GLib.Variant("u", cursor),
         }
+        # ScreenCast v4+: remember the user's source choice across recordings so
+        # the compositor picker is not shown every single time.
+        if self._screencast_version() >= 4:
+            options["persist_mode"] = GLib.Variant("u", 2)  # persist until revoked
+            token = self._load_restore_token()
+            if token:
+                options["restore_token"] = GLib.Variant("s", token)
         params = GLib.Variant("(oa{sv})", (self._session_handle, options))
         self._portal_request("SelectSources", params, handle_token)
 
@@ -254,11 +305,14 @@ class PortalRecorder(CaptureBackend):
         options = {"handle_token": GLib.Variant("s", handle_token)}
         params = GLib.Variant("(osa{sv})", (self._session_handle, "", options))
         results = self._portal_request("Start", params, handle_token)
+        token = results.get("restore_token")
+        if token:
+            self._save_restore_token(str(token))
         return results.get("streams", [])
 
     def _open_pipewire_remote(self) -> int:
         params = GLib.Variant("(oa{sv})", (self._session_handle, {}))
-        reply, fd_list = self._conn.call_with_unix_fd_list_sync(
+        reply, fd_list = self._connection().call_with_unix_fd_list_sync(
             PORTAL_BUS, PORTAL_PATH, SCREENCAST_IFACE, "OpenPipeWireRemote",
             params, GLib.VariantType("(h)"), Gio.DBusCallFlags.NONE, -1, None, None,
         )
@@ -282,13 +336,19 @@ class PortalRecorder(CaptureBackend):
     def _build_pipeline(self, fd: int, node_id: int, output: Path) -> None:
         Gst = _gst()
         fps = self.config.framerate
+        threads = max(1, min(os.cpu_count() or 2, 8))
         # Lossless VP9 intermediate (matches the X11 backend's GIF path); the
         # encode pipeline re-encodes from here to the requested output format.
+        # deadline=1 (realtime) + cpu-used=8 keep the encoder fast enough to
+        # not stall the capture (the default "best" deadline cannot keep up),
+        # and the queues decouple capture from encoding. The filesink location
+        # is quoted so cache paths containing spaces parse correctly.
         desc = (
             f"pipewiresrc fd={fd} path={node_id} do-timestamp=true "
-            f"keepalive-time=1000 ! videorate ! "
-            f"video/x-raw,framerate={fps}/1 ! videoconvert ! "
-            f"vp9enc lossless=1 ! webmmux ! filesink location={output}"
+            f"keepalive-time=1000 ! queue ! videorate ! "
+            f"video/x-raw,framerate={fps}/1 ! videoconvert ! queue ! "
+            f"vp9enc lossless=1 deadline=1 cpu-used=8 threads={threads} ! "
+            f'webmmux ! filesink location="{output}"'
         )
         log.debug("gst pipeline: %s", desc)
         self._pipeline = Gst.parse_launch(desc)

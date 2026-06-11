@@ -13,7 +13,6 @@ from __future__ import annotations
 import logging
 import threading
 from pathlib import Path
-from typing import Optional
 
 from .capture import CaptureBackend, create_backend
 from .encode import encode_recording
@@ -23,10 +22,10 @@ log = logging.getLogger(__name__)
 
 
 class RecordingController:
-    def __init__(self, config: RecordingConfig, *, prefer: Optional[str] = None) -> None:
+    def __init__(self, config: RecordingConfig, *, prefer: str | None = None) -> None:
         self.config = config
         self._prefer = prefer
-        self._backend: Optional[CaptureBackend] = None
+        self._backend: CaptureBackend | None = None
         self._cancel = threading.Event()
 
     @property
@@ -68,6 +67,11 @@ class RecordingController:
         try:
             intermediate = backend.stop()
             log.debug("intermediate recording: %s", intermediate)
+            if backend.intermediate_is_final:
+                # Already captured in the output format at final quality;
+                # re-encoding would only add a lossy generation.
+                log.debug("intermediate is final; passing through")
+                return intermediate
             output = encode_recording(intermediate, self.config, cancel_event=self._cancel)
             # The lossless intermediate is no longer needed.
             try:

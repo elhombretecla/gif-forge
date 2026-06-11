@@ -15,7 +15,6 @@ import logging
 import threading
 import time
 from pathlib import Path
-from typing import Optional
 
 import gi
 
@@ -108,6 +107,8 @@ class ExportDialog(Adw.Window):
     # --- internals -----------------------------------------------------------
 
     def _choose_and_export(self) -> None:
+        if self._busy:
+            return
         preset = self.selected_preset
         ext = preset.output_format.file_extension
         default_name = time.strftime(f"{APP_NAME} %Y-%m-%d %H-%M") + f".{ext}"
@@ -124,7 +125,10 @@ class ExportDialog(Adw.Window):
         chooser.show()
 
     def _on_chooser_response(self, chooser, response: int) -> None:
-        path = chooser.get_file().get_path() if response == Gtk.ResponseType.ACCEPT else None
+        path = None
+        if response == Gtk.ResponseType.ACCEPT:
+            gfile = chooser.get_file()
+            path = gfile.get_path() if gfile is not None else None
         chooser.destroy()
         self._chooser = None
         if path:
@@ -143,12 +147,14 @@ class ExportDialog(Adw.Window):
             export_frames(frames, preset.output_format, dest, loop=preset.loop)
             GLib.idle_add(self._on_done, dest)
         except Exception as exc:  # noqa: BLE001
+            log.exception("export to %s failed", dest)
             GLib.idle_add(self._on_error, str(exc))
         finally:
             if render_cache is not None:
                 render_cache.cleanup()
 
     def _on_done(self, dest: Path) -> bool:
+        self._busy = False
         self._spinner.stop()
         self._notify(dest)
         self.close()

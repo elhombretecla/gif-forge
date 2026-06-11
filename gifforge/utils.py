@@ -12,11 +12,15 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
+import time
 from pathlib import Path
 
 from . import APP_ID
 
 _TEMP_PREFIX = "gif-forge-"
+
+# Leftovers from crashed sessions older than this are swept at startup.
+_STALE_TEMP_AGE_SECONDS = 2 * 24 * 3600
 
 
 def check_for_executable(name: str) -> bool:
@@ -47,3 +51,26 @@ def create_temp_file(extension: str) -> Path:
 
 def create_temp_dir() -> Path:
     return Path(tempfile.mkdtemp(prefix=_TEMP_PREFIX, dir=str(cache_dir())))
+
+
+def cleanup_stale_temp_files(max_age_seconds: int = _STALE_TEMP_AGE_SECONDS) -> int:
+    """Sweep temp files/dirs left behind by crashed sessions.
+
+    Lossless intermediates can be hundreds of MB, so leftovers accumulate fast.
+    Only entries matching our temp prefix are touched (autosave snapshots live
+    under ``autosave/`` and are never matched). Returns how many were removed.
+    """
+    cutoff = time.time() - max_age_seconds
+    removed = 0
+    for entry in cache_dir().glob(_TEMP_PREFIX + "*"):
+        try:
+            if entry.stat().st_mtime >= cutoff:
+                continue
+            if entry.is_dir():
+                shutil.rmtree(entry, ignore_errors=True)
+            else:
+                entry.unlink(missing_ok=True)
+            removed += 1
+        except OSError:
+            continue
+    return removed

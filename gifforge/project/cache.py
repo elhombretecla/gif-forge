@@ -40,7 +40,7 @@ class SessionCache:
     def cleanup(self) -> None:
         shutil.rmtree(self.root, ignore_errors=True)
 
-    def __enter__(self) -> "SessionCache":
+    def __enter__(self) -> SessionCache:
         return self
 
     def __exit__(self, *_exc) -> None:

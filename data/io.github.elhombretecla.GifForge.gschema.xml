@@ -70,5 +70,9 @@
       <default>""</default>
       <summary>Path where the last recording was saved</summary>
     </key>
+    <key name="persist-portal-restore-token" type="s">
+      <default>""</default>
+      <summary>ScreenCast portal restore token (skips the source picker on repeat recordings)</summary>
+    </key>
   </schema>
 </schemalist>

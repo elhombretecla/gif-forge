@@ -10,7 +10,8 @@ import shutil
 from pathlib import Path
 
 import gi
-gi.require_version("Gtk", "4.0"); gi.require_version("Adw", "1")
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
 from gi.repository import GLib
 
 from gifforge.ui.application import GifForgeApplication
@@ -50,7 +51,8 @@ def main():
                 state["area_ok"] = area.is_valid()
             except Exception as exc:  # noqa: BLE001
                 state["error"] = f"extract_area: {exc}"
-                app.quit(); return False
+                app.quit()
+                return False
             win.toggle_recording()  # start (delay 0)
             GLib.timeout_add(1500, stop_recording)
             return False

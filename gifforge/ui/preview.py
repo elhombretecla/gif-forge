@@ -16,7 +16,7 @@ from pathlib import Path
 import gi
 
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gdk, Gtk  # noqa: E402
+from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 from .gtk_compat import configure_picture_fit  # noqa: E402
 
@@ -85,10 +85,16 @@ class Preview(Gtk.ScrolledWindow):
             if hasattr(self._picture, "set_can_shrink"):
                 self._picture.set_can_shrink(False)
 
-    def _texture_for(self, path: str) -> Gdk.Texture:
+    def _texture_for(self, path: str) -> Gdk.Texture | None:
         texture = self._texture_cache.get(path)
         if texture is None:
-            texture = Gdk.Texture.new_from_filename(path)
+            try:
+                texture = Gdk.Texture.new_from_filename(path)
+            except GLib.Error as exc:
+                # The frame PNG may have vanished (cache cleanup race) or be
+                # corrupt; show nothing rather than crash the preview.
+                log.warning("could not load preview %s: %s", path, exc)
+                return None
             self._texture_cache[path] = texture
         return texture
 

@@ -14,7 +14,7 @@ import logging
 from pathlib import Path
 from typing import Tuple
 
-from ..encode.ffmpeg import FFMPEG
+from ..encode.ffmpeg import FFMPEG_BASE
 from ..encode.runner import run_command
 
 log = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ def crop_png(source: Path, rect: Tuple[int, int, int, int], cache) -> Path:
     _crop_counter += 1
     out = cache.frames_dir / f"crop_{_crop_counter:05d}.png"
     argv = [
-        FFMPEG, "-y", "-i", str(source),
+        *FFMPEG_BASE, "-i", str(source),
         "-vf", f"crop={w}:{h}:{x}:{y}",
         str(out),
     ]

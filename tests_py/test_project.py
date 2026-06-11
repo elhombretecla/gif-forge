@@ -66,7 +66,8 @@ def test_save_load_roundtrip(env):
 
 def test_rejects_unknown_version(env):
     store, cache_mod, doc_mod, tmp = env
-    import json, zipfile
+    import json
+    import zipfile
     bad = tmp / "bad.gifforge"
     with zipfile.ZipFile(bad, "w") as z:
         z.writestr("project.json", json.dumps({"version": 999, "frames": []}))
@@ -74,11 +75,45 @@ def test_rejects_unknown_version(env):
         store.load_project(bad)
 
 
+def test_rejects_illegal_frame_names(env):
+    store, cache_mod, doc_mod, tmp = env
+    import json
+    import zipfile
+    bad = tmp / "evil.gifforge"
+    with zipfile.ZipFile(bad, "w") as z:
+        z.writestr("project.json", json.dumps({
+            "version": doc_mod.PROJECT_VERSION,
+            "frames": [
+                {"file": "../escape.png", "delay_ms": 100, "source_index": 0},
+            ],
+        }))
+        z.writestr("../escape.png", b"x")
+    with pytest.raises(store.ProjectError):
+        store.load_project(bad)
+
+
+def test_rejects_oversized_frame_list(env):
+    store, cache_mod, doc_mod, tmp = env
+    import json
+    import zipfile
+    bad = tmp / "huge.gifforge"
+    entry = {"file": "frames/00001.png", "delay_ms": 1, "source_index": 0}
+    with zipfile.ZipFile(bad, "w") as z:
+        z.writestr("project.json", json.dumps({
+            "version": doc_mod.PROJECT_VERSION,
+            "frames": [entry] * 20_001,
+        }))
+    with pytest.raises(store.ProjectError):
+        store.load_project(bad)
+
+
 def test_recents_add_dedup_and_prune(env):
     store, cache_mod, doc_mod, tmp = env
     recents = store.RecentProjects(limit=3)
-    p1 = tmp / "1.gifforge"; p1.write_text("x")
-    p2 = tmp / "2.gifforge"; p2.write_text("x")
+    p1 = tmp / "1.gifforge"
+    p1.write_text("x")
+    p2 = tmp / "2.gifforge"
+    p2.write_text("x")
     recents.add(p1)
     recents.add(p2)
     recents.add(p1)  # moves p1 to front, no duplicate

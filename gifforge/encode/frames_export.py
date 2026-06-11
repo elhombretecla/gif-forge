@@ -17,12 +17,12 @@ from __future__ import annotations
 
 import threading
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 from ..models import OutputFormat
 from ..utils import create_temp_file
 from .errors import EncodeError
-from .ffmpeg import FFMPEG
+from .ffmpeg import FFMPEG_BASE, PALETTEUSE
 from .runner import run_command
 
 
@@ -62,7 +62,12 @@ def _concat_input(concat_path: Path) -> List[str]:
 
 
 def build_palettegen_argv(concat_path: Path, palette_path: Path) -> List[str]:
-    return [FFMPEG, "-y", *_concat_input(concat_path), "-vf", "palettegen", str(palette_path)]
+    return [
+        *FFMPEG_BASE,
+        *_concat_input(concat_path),
+        "-vf", "palettegen=stats_mode=diff",
+        str(palette_path),
+    ]
 
 
 def build_paletteuse_argv(
@@ -70,10 +75,10 @@ def build_paletteuse_argv(
     *, loop: bool, final_delay_cs: int,
 ) -> List[str]:
     return [
-        FFMPEG, "-y",
+        *FFMPEG_BASE,
         *_concat_input(concat_path),
         "-i", str(palette_path),
-        "-lavfi", "paletteuse",
+        "-lavfi", PALETTEUSE,
         "-loop", "0" if loop else "-1",
         "-final_delay", str(final_delay_cs),
         str(output_path),
@@ -82,7 +87,7 @@ def build_paletteuse_argv(
 
 def build_apng_argv(concat_path: Path, output_path: Path, *, loop: bool) -> List[str]:
     return [
-        FFMPEG, "-y",
+        *FFMPEG_BASE,
         *_concat_input(concat_path),
         "-f", "apng",
         "-plays", "0" if loop else "1",
@@ -92,11 +97,14 @@ def build_apng_argv(concat_path: Path, output_path: Path, *, loop: bool) -> List
 
 def build_webm_argv(concat_path: Path, output_path: Path) -> List[str]:
     return [
-        FFMPEG, "-y",
+        *FFMPEG_BASE,
         *_concat_input(concat_path),
         "-codec:v", "libvpx-vp9",
         "-qmin", "10", "-qmax", "50", "-crf", "13",
         "-b:v", "1M", "-pix_fmt", "yuv420p",
+        # Even dimensions: edited frames can be cropped to odd sizes, which
+        # yuv420p cannot represent.
+        "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
         str(output_path),
     ]
 
@@ -107,7 +115,7 @@ def export_frames(
     output_path: Path,
     *,
     loop: bool = True,
-    cancel_event: Optional[threading.Event] = None,
+    cancel_event: threading.Event | None = None,
 ) -> Path:
     """Encode *frames* to *output_path* in *output_format*, honoring delays."""
     concat = create_temp_file("txt")

@@ -13,7 +13,6 @@ from __future__ import annotations
 import logging
 import threading
 from pathlib import Path
-from typing import Optional
 
 from ..models import OutputFormat, RecordingConfig
 from . import ffmpeg, gifski
@@ -25,11 +24,14 @@ def encode_recording(
     input_path: Path,
     config: RecordingConfig,
     *,
-    cancel_event: Optional[threading.Event] = None,
+    cancel_event: threading.Event | None = None,
 ) -> Path:
     """Encode the raw recording at *input_path* into the configured format.
 
     Returns the path to the produced file (a temp file the caller owns).
+    Backends whose intermediate already *is* the final format (see
+    ``CaptureBackend.intermediate_is_final``) skip this entirely — the
+    controller passes the intermediate through, avoiding a second lossy encode.
     """
     config.validate()
     fps = config.framerate
@@ -38,19 +40,25 @@ def encode_recording(
     if fmt == OutputFormat.WEBM:
         return ffmpeg.encode_webm(input_path, fps, cancel_event=cancel_event)
 
-    if fmt == OutputFormat.GIF and config.gifski_enabled and gifski.is_available():
-        log.debug("encoding GIF via gifski")
+    if fmt == OutputFormat.APNG:
+        log.debug("encoding APNG directly (true colour, no palette)")
+        return ffmpeg.encode_apng(input_path, fps, cancel_event=cancel_event)
+
+    if config.gifski_enabled and gifski.is_available():
         frames = ffmpeg.extract_frames(input_path, cancel_event=cancel_event)
         try:
-            return gifski.encode_gif(
-                frames, fps, config.gifski_quality, cancel_event=cancel_event
+            if gifski.frames_within_argv_limit(frames):
+                log.debug("encoding GIF via gifski (%d frames)", len(frames))
+                return gifski.encode_gif(
+                    frames, fps, config.gifski_quality, cancel_event=cancel_event
+                )
+            log.warning(
+                "recording too long for gifski (%d frames); falling back to ffmpeg",
+                len(frames),
             )
         finally:
             for frame in frames:
                 frame.unlink(missing_ok=True)
 
-    # GIF (ffmpeg 2-pass) or APNG.
-    log.debug("encoding %s via ffmpeg 2-pass", fmt.value)
-    return ffmpeg.encode_gif_or_apng(
-        input_path, fps, output_format=fmt, cancel_event=cancel_event
-    )
+    log.debug("encoding GIF via ffmpeg 2-pass")
+    return ffmpeg.encode_gif(input_path, fps, cancel_event=cancel_event)

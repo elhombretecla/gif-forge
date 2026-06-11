@@ -48,7 +48,7 @@ def _x11():
 
 def _open():
     x = _x11()
-    dpy = x.XOpenDisplay((os.environ.get("DISPLAY", "").encode() or None))
+    dpy = x.XOpenDisplay(os.environ.get("DISPLAY", "").encode() or None)
     if not dpy:
         raise RuntimeError("cannot open X display")
     return x, dpy
@@ -78,8 +78,13 @@ def _xshape():
 
 
 def _window_size(x, dpy, xid: int) -> Tuple[int, int]:
-    root = ctypes.c_ulong(); gx = ctypes.c_int(); gy = ctypes.c_int()
-    w = ctypes.c_uint(); h = ctypes.c_uint(); bw = ctypes.c_uint(); depth = ctypes.c_uint()
+    root = ctypes.c_ulong()
+    gx = ctypes.c_int()
+    gy = ctypes.c_int()
+    w = ctypes.c_uint()
+    h = ctypes.c_uint()
+    bw = ctypes.c_uint()
+    depth = ctypes.c_uint()
     x.XGetGeometry.argtypes = [
         ctypes.c_void_p, ctypes.c_ulong,
         ctypes.POINTER(ctypes.c_ulong), ctypes.POINTER(ctypes.c_int),

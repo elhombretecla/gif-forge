@@ -16,7 +16,7 @@ can be driven by externally supplied events.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from typing import ClassVar, List, Tuple
 
 Color = Tuple[float, float, float, float]  # r, g, b, a in 0..1
@@ -81,12 +81,22 @@ _REGISTRY = {
 
 
 def overlay_from_dict(data: dict) -> Overlay:
+    if not isinstance(data, dict):
+        raise ValueError(f"overlay entry must be an object, got {type(data).__name__}")
     payload = dict(data)
     kind = payload.pop("kind", "overlay")
     cls = _REGISTRY.get(kind)
     if cls is None:
         raise ValueError(f"unknown overlay kind: {kind!r}")
+    # Project manifests can come from third parties: reject unexpected fields
+    # instead of letting cls(**payload) raise a bare TypeError.
+    allowed = {f.name for f in fields(cls)}
+    unknown = sorted(set(payload) - allowed)
+    if unknown:
+        raise ValueError(f"unknown overlay field(s) for {kind!r}: {unknown}")
     # JSON turns tuples into lists; normalize the ones we index positionally.
     if "events" in payload:
         payload["events"] = [tuple(e) for e in payload["events"]]
+    if "color" in payload:
+        payload["color"] = tuple(payload["color"])
     return cls(**payload)

@@ -15,7 +15,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from gi.repository import Gio
 
@@ -41,7 +41,17 @@ DEFAULTS: Dict[str, Any] = {
     "interface-open-editor-after-recording": True,
     "interface-language": "en",
     "persist-save-folder": "",
+    "persist-portal-restore-token": "",
 }
+
+
+def _clamp_int(value: Any, lo: int, hi: int, default: int) -> int:
+    """Coerce *value* (possibly hand-edited JSON) into [lo, hi]."""
+    try:
+        v = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(lo, min(hi, v))
 
 
 def _config_path() -> Path:
@@ -53,18 +63,18 @@ def _config_path() -> Path:
 
 class Settings:
     def __init__(self, *, force_json: bool = False) -> None:
-        self._gsettings: Optional[Gio.Settings] = (
+        self._gsettings: Gio.Settings | None = (
             None if force_json else self._try_gsettings()
         )
         self._json: Dict[str, Any] = {}
-        self._path: Optional[Path] = None
+        self._path: Path | None = None
         if self._gsettings is None:
             self._path = _config_path()
             self._json = self._load_json()
         log.info("settings backend: %s", self.backend)
 
     @staticmethod
-    def _try_gsettings() -> Optional[Gio.Settings]:
+    def _try_gsettings() -> Gio.Settings | None:
         try:
             source = Gio.SettingsSchemaSource.get_default()
             if source is not None and source.lookup(SCHEMA_ID, True) is not None:
@@ -116,19 +126,27 @@ class Settings:
     # --- typed convenience ---------------------------------------------------
 
     def to_recording_config(self) -> RecordingConfig:
+        # The JSON backend can hold hand-edited (out-of-range or mistyped)
+        # values; clamp here so a bad settings file degrades instead of
+        # surfacing a raw ValueError at record time.
+        try:
+            fmt = OutputFormat.from_value(self.get("recording-output-format"))
+        except (ValueError, AttributeError):
+            log.warning("invalid recording-output-format; falling back to GIF")
+            fmt = OutputFormat.GIF
         return RecordingConfig(
-            output_format=OutputFormat.from_value(self.get("recording-output-format")),
-            framerate=self.get("recording-framerate"),
-            downsample=self.get("recording-downsample"),
-            capture_mouse=self.get("recording-capture-mouse"),
-            capture_sound=self.get("recording-capture-sound"),
-            start_delay=self.get("recording-start-delay"),
-            gifski_enabled=self.get("recording-gifski-enabled"),
-            gifski_quality=self.get("recording-gifski-quality"),
+            output_format=fmt,
+            framerate=_clamp_int(self.get("recording-framerate"), 1, 60, 10),
+            downsample=_clamp_int(self.get("recording-downsample"), 1, 4, 1),
+            capture_mouse=bool(self.get("recording-capture-mouse")),
+            capture_sound=bool(self.get("recording-capture-sound")),
+            start_delay=_clamp_int(self.get("recording-start-delay"), 0, 60, 3),
+            gifski_enabled=bool(self.get("recording-gifski-enabled")),
+            gifski_quality=_clamp_int(self.get("recording-gifski-quality"), 20, 100, 60),
         )
 
 
-_INSTANCE: Optional[Settings] = None
+_INSTANCE: Settings | None = None
 
 
 def get_settings() -> Settings:

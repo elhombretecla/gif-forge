@@ -50,6 +50,16 @@ class GifForgeApplication(Adw.Application):
         self._setup_actions()
         settings = get_settings()
         apply_color_scheme(settings.get("interface-prefer-dark-theme"))
+        # Sweep intermediates left behind by crashed sessions (these can be
+        # hundreds of MB each); autosave snapshots are untouched.
+        from ..utils import cleanup_stale_temp_files
+
+        try:
+            removed = cleanup_stale_temp_files()
+            if removed:
+                log.info("removed %d stale temp file(s)", removed)
+        except Exception as exc:  # noqa: BLE001 - never block startup on this
+            log.warning("stale temp cleanup failed: %s", exc)
 
     def do_activate(self) -> None:
         if self._window is None:
@@ -71,9 +81,9 @@ class GifForgeApplication(Adw.Application):
         cache = SessionCache()
         try:
             document = load_project(Path(path), cache)
-        except Exception as exc:  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             cache.cleanup()
-            log.error("could not open project %s: %s", path, exc)
+            log.exception("could not open project %s", path)
             return
         editor = EditorWindow(application=self)
         editor.present()

@@ -5,7 +5,6 @@
 
 import shutil
 import subprocess
-from pathlib import Path
 
 import pytest
 
@@ -33,6 +32,24 @@ def test_click_overlay_roundtrip_and_applies():
     assert back.events == [(3, 40, 50)]  # tuples restored from JSON lists
     assert back.applies_to(3, 10) and back.applies_to(5, 10)
     assert not back.applies_to(6, 10) and not back.applies_to(2, 10)
+
+
+def test_overlay_from_dict_rejects_bad_input():
+    with pytest.raises(ValueError):
+        overlay_from_dict({"kind": "nope"})
+    with pytest.raises(ValueError):
+        overlay_from_dict({"kind": "text", "evil_field": 1})
+    with pytest.raises(ValueError):
+        overlay_from_dict("not-a-dict")
+
+
+def test_overlay_color_normalized_to_tuple():
+    # JSON loads tuples back as lists; from_dict must restore tuples.
+    o = TextOverlay(text="x", color=(1.0, 0.5, 0.0, 1.0))
+    d = o.to_dict()
+    d["color"] = list(d["color"])
+    back = overlay_from_dict(d)
+    assert back.color == (1.0, 0.5, 0.0, 1.0)
 
 
 def test_text_applies_to_range():
@@ -75,7 +92,7 @@ def test_render_overlays_changes_pixels(tmp_path, monkeypatch):
     stride = surface.get_stride()
     # Cairo ARGB32 is premultiplied BGRA in memory.
     off = 30 * stride + 40 * 4
-    b, g, r, a = data[off], data[off + 1], data[off + 2], data[off + 3]
+    b, g, r, _a = data[off], data[off + 1], data[off + 2], data[off + 3]
     assert r > 150 and g < 80 and b < 80  # red dot present
     cache.cleanup()
 

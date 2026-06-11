@@ -158,7 +158,16 @@ class FrameStrip(Gtk.ScrolledWindow):
         key = (path, height)
         texture = self._texture_cache.get(key)
         if texture is None:
-            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, -1, height, True)
+            try:
+                pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, -1, height, True)
+            except GLib.Error as exc:
+                # The cached PNG may have vanished or be corrupt; a placeholder
+                # keeps the strip rendering instead of crashing the bind.
+                log.warning("could not load thumbnail %s: %s", path, exc)
+                pixbuf = GdkPixbuf.Pixbuf.new(
+                    GdkPixbuf.Colorspace.RGB, False, 8, height, height
+                )
+                pixbuf.fill(0x44444400)
             texture = Gdk.Texture.new_for_pixbuf(pixbuf)
             self._texture_cache[key] = texture
         return texture

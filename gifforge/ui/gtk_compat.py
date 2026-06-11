@@ -10,10 +10,14 @@ Local dev runs GTK 4.6; the target runtime is newer. A few APIs we want
 
 from __future__ import annotations
 
+import logging
+
 import gi
 
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk  # noqa: E402
+
+log = logging.getLogger(__name__)
 
 
 def configure_picture_fit(picture: Gtk.Picture) -> None:
@@ -30,5 +34,5 @@ def scroll_list_to(list_view: Gtk.ListView, index: int) -> None:
     if hasattr(list_view, "scroll_to") and hasattr(Gtk, "ListScrollFlags"):
         try:
             list_view.scroll_to(index, Gtk.ListScrollFlags.NONE, None)
-        except Exception:  # pragma: no cover - best effort
-            pass
+        except Exception as exc:  # pragma: no cover - best effort
+            log.debug("scroll_to(%d) failed: %s", index, exc)

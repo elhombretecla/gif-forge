@@ -14,7 +14,6 @@ from __future__ import annotations
 import enum
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional
 
 from ..models import RecordingArea, RecordingConfig
 
@@ -33,7 +32,11 @@ class CaptureBackend(ABC):
     def __init__(self, config: RecordingConfig) -> None:
         self.config = config
         self.state = CaptureState.IDLE
-        self.temp_file: Optional[Path] = None
+        self.temp_file: Path | None = None
+        # True when the intermediate is already in the requested output format
+        # at final quality, so the encode pipeline must NOT re-encode it (a
+        # second lossy pass). Set by backends in start().
+        self.intermediate_is_final = False
 
     @staticmethod
     @abstractmethod

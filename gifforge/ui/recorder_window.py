@@ -11,9 +11,9 @@ tiny sizes (e.g. 300×200) for small GIFs. Pressing Record runs an optional
 countdown, captures the region via the best available backend, encodes off the
 main thread, then offers a save dialog and a desktop notification.
 
-Region extraction uses X11 absolute geometry today; on Wayland the ScreenCast
-portal supplies the region (T4), so :meth:`_extract_area` raises a clear error
-there until that backend lands.
+Region extraction uses X11 absolute geometry; on Wayland the compositor's
+ScreenCast picker chooses the source, so :meth:`_extract_area` returns an
+advisory size-only area there.
 """
 
 from __future__ import annotations
@@ -23,7 +23,6 @@ import shutil
 import threading
 import time
 from pathlib import Path
-from typing import Optional
 
 import gi
 
@@ -89,11 +88,12 @@ class RecorderWindow(Adw.ApplicationWindow):
         self.add_css_class("gifforge-recorder")
 
         self._settings = get_settings()
-        self._controller: Optional[RecordingController] = None
+        self._controller: RecordingController | None = None
         self._countdown_source: int = 0
         self._timer_source: int = 0
         self._elapsed: int = 0
-        self._save_dialog: Optional[Gtk.FileChooserNative] = None
+        self._save_dialog: Gtk.FileChooserNative | None = None
+        self._worker_thread: threading.Thread | None = None
         self._syncing_size = False  # guard against control<->capture-area feedback
         self._closing = False
         self._hole_active = False  # XShape bounding hole punched over the capture area
@@ -218,13 +218,23 @@ class RecorderWindow(Adw.ApplicationWindow):
         self._set_capture_hole(True)
 
     def _on_close_request(self, *_args) -> bool:
-        """Closing the frame tears down the control bar too."""
+        """Closing the frame tears down the control bar too.
+
+        Any in-flight recording/encode is cancelled so no orphan ffmpeg/
+        GStreamer processes (or their temp files) outlive the window.
+        """
         if not self._closing:
             self._closing = True
+            controller = self._controller
+            if controller is not None:
+                try:
+                    controller.cancel()
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("cancel on close failed: %s", exc)
             self._controls.close()
         return False
 
-    def _capture_hole(self) -> Optional[tuple[int, int, int, int]]:
+    def _capture_hole(self) -> tuple[int, int, int, int] | None:
         """The capture region as an (x, y, w, h) rect in window-relative device px.
 
         Inset by :data:`_BORDER` on every side so the coloured frame sits on
@@ -388,8 +398,9 @@ class RecorderWindow(Adw.ApplicationWindow):
 
         self._controller = RecordingController(self._pending_config)
         try:
-            backend = self._controller.start(area)  # noqa: F841
+            backend = self._controller.start(area)
         except Exception as exc:  # noqa: BLE001
+            log.exception("could not start recording")
             self._controller = None
             self._show_error(_("Could not start recording"), str(exc))
             self._reset_idle_ui()
@@ -401,7 +412,12 @@ class RecorderWindow(Adw.ApplicationWindow):
         # instant capture starts.
         self._set_click_through(True)  # let clicks reach the app being recorded
         self._controls.set_record_button(_("Stop"), "destructive-action")
-        self._controls.set_status("")
+        if backend == "PortalRecorder":
+            # Wayland: the portal records the source picked in the system
+            # dialog (full monitor/window), not this frame's rectangle.
+            self._controls.set_status(_("Recording the source chosen in the system dialog"))
+        else:
+            self._controls.set_status("")
         self._start_timer()
 
     def _stop_recording(self) -> None:
@@ -409,40 +425,61 @@ class RecorderWindow(Adw.ApplicationWindow):
         self._set_click_through(False)  # restore full interactivity immediately
         self._controls.set_record_button(None, None, sensitive=False)
         self._controls.start_spinner()
+        # The worker owns its controller reference: self._controller can be
+        # nulled by cancel/close while the thread is still running.
+        controller = self._controller
+        if controller is None:
+            self._reset_idle_ui()
+            return
         if self._settings.get("interface-open-editor-after-recording"):
             self._controls.set_status(_("Processing…"))
-            thread = threading.Thread(target=self._editor_worker, daemon=True)
+            thread = threading.Thread(
+                target=self._editor_worker, args=(controller,), daemon=True
+            )
         else:
             self._controls.set_status(_("Encoding…"))
-            thread = threading.Thread(target=self._encode_worker, daemon=True)
+            thread = threading.Thread(
+                target=self._encode_worker, args=(controller,), daemon=True
+            )
+        self._worker_thread = thread
         thread.start()
 
-    def _encode_worker(self) -> None:
+    def _encode_worker(self, controller: RecordingController) -> None:
         try:
-            output = self._controller.stop_and_encode()
+            output = controller.stop_and_encode()
             GLib.idle_add(self._on_encoded, output)
         except Exception as exc:  # noqa: BLE001
+            log.exception("encoding failed")
             GLib.idle_add(self._on_encode_failed, str(exc))
         finally:
             self._controller = None
 
-    def _editor_worker(self) -> None:
+    def _editor_worker(self, controller: RecordingController) -> None:
         """Stop capture, decode to frames, and hand off to the editor."""
         from ..frames.decode import decode_to_frames
         from ..project.cache import SessionCache
 
+        cache = None
         try:
-            intermediate = self._controller.stop_capture()
+            intermediate = controller.stop_capture()
             cache = SessionCache()
             frames = decode_to_frames(intermediate, self._pending_config.framerate, cache)
             intermediate.unlink(missing_ok=True)
             GLib.idle_add(self._open_editor, frames, cache)
         except Exception as exc:  # noqa: BLE001
+            log.exception("decode for editor failed")
+            if cache is not None:
+                cache.cleanup()
             GLib.idle_add(self._on_encode_failed, str(exc))
         finally:
             self._controller = None
 
     def _open_editor(self, frames, cache) -> bool:
+        # The window may have been closed while the worker ran; its widgets are
+        # disposed, so don't touch them (and don't leak the decoded frames).
+        if self._closing:
+            cache.cleanup()
+            return False
         from .editor_window import EditorWindow
 
         self._controls.stop_spinner()
@@ -459,11 +496,16 @@ class RecorderWindow(Adw.ApplicationWindow):
         return False
 
     def _on_encoded(self, output: Path) -> bool:
+        if self._closing:
+            Path(output).unlink(missing_ok=True)
+            return False
         self._controls.stop_spinner()
         self._show_save_dialog(output)
         return False
 
     def _on_encode_failed(self, message: str) -> bool:
+        if self._closing:
+            return False
         self._controls.stop_spinner()
         self._show_error(_("Encoding failed"), message)
         self._reset_idle_ui()
@@ -484,12 +526,13 @@ class RecorderWindow(Adw.ApplicationWindow):
         from ..capture.factory import SessionType
 
         if detect_session() != SessionType.X11:
-            raise RuntimeError(
-                _(
-                    "Region capture on this session needs the Wayland portal "
-                    "backend. Run on X11 for now."
-                )
-            )
+            # On Wayland the compositor's ScreenCast picker decides what is
+            # shared, so coordinates are advisory: return the capture-area size
+            # as a hint and let the portal backend take over.
+            scale = self._scale_factor()
+            width = max(1, self._capture_area.get_width() * scale)
+            height = max(1, self._capture_area.get_height() * scale)
+            return RecordingArea(0, 0, width, height)
 
         gi.require_version("GdkX11", "4.0")
         from gi.repository import GdkX11  # noqa: F401 (registers the type)
@@ -528,14 +571,9 @@ class RecorderWindow(Adw.ApplicationWindow):
 
         # Clip to the visible screen, all in device pixels.
         screen_w, screen_h = self._virtual_screen_size()
-        screen_w *= scale
-        screen_h *= scale
-        left = min(max(0, left), max(0, screen_w - 1))
-        top = min(max(0, top), max(0, screen_h - 1))
-        width = max(0, min(width, screen_w - left))
-        height = max(0, min(height, screen_h - top))
-
-        area = RecordingArea(left, top, width, height)
+        area = RecordingArea(left, top, width, height).clipped_to(
+            screen_w * scale, screen_h * scale
+        )
         log.debug("recording area: %s (scale=%d)", area, scale)
         if not area.is_valid():
             raise RecordingError("recording area has zero size")
@@ -571,11 +609,25 @@ class RecorderWindow(Adw.ApplicationWindow):
     def _on_save_response(
         self, dialog: Gtk.FileChooserNative, response: int, output: Path
     ) -> None:
+        retry = False
         try:
             if response == Gtk.ResponseType.ACCEPT:
                 gfile = dialog.get_file()
-                dest = gfile.get_path()
-                shutil.move(str(output), dest)
+                dest = gfile.get_path() if gfile is not None else None
+                if not dest:
+                    self._show_error(
+                        _("Could not save recording"), _("No destination was selected.")
+                    )
+                    retry = True
+                    return
+                try:
+                    shutil.move(str(output), dest)
+                except (OSError, shutil.Error) as exc:
+                    # Keep the temp file: the user can retry with another path.
+                    log.exception("saving recording to %s failed", dest)
+                    self._show_error(_("Could not save recording"), str(exc))
+                    retry = True
+                    return
                 self._notify_saved(Path(dest))
                 self._controls.set_status(_("Saved to {path}").format(path=dest), sticky=True)
             else:
@@ -585,6 +637,8 @@ class RecorderWindow(Adw.ApplicationWindow):
             dialog.destroy()
             self._save_dialog = None
             self._reset_idle_ui()
+            if retry:
+                self._show_save_dialog(output)
 
     def _notify_saved(self, path: Path) -> None:
         if not self._settings.get("interface-show-notification"):
@@ -629,7 +683,7 @@ class _ControlBar(Adw.ApplicationWindow):
     these controls float beside it.
     """
 
-    def __init__(self, recorder: "RecorderWindow", **kwargs) -> None:
+    def __init__(self, recorder: RecorderWindow, **kwargs) -> None:
         super().__init__(**kwargs)
         self._recorder = recorder
         self._settings = recorder._settings
@@ -785,7 +839,7 @@ class _ControlBar(Adw.ApplicationWindow):
         return list(OutputFormat)[self._format_dropdown.get_selected()]
 
     def set_record_button(
-        self, label: Optional[str], css: Optional[str], *, sensitive: bool = True
+        self, label: str | None, css: str | None, *, sensitive: bool = True
     ) -> None:
         for klass in ("suggested-action", "destructive-action"):
             self._record_button.remove_css_class(klass)
@@ -812,7 +866,7 @@ class _ControlBar(Adw.ApplicationWindow):
     def set_hint_visible(self, visible: bool) -> None:
         self._hint_label.set_visible(visible)
 
-    def set_countdown(self, value: Optional[int]) -> None:
+    def set_countdown(self, value: int | None) -> None:
         """Show the pre-recording countdown in the timer slot (None hides it).
 
         Lives in the control bar so the capture region's see-through hole is

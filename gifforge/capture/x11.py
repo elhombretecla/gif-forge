@@ -4,9 +4,9 @@
 """X11 screen capture via ffmpeg ``x11grab``.
 
 Ported from ``ffmpeg-screen-recorder.vala``. Records the area to a WebM
-intermediate (lossless VP9 for the GIF/APNG path, quality VP9 for WebM output),
-which the encode pipeline then converts. The secondary backend for GIF Forge;
-Wayland (portal) is primary.
+intermediate (quality VP9 for WebM output — passed through unchanged — and
+lossless VP9 for the GIF/APNG path), which the encode pipeline then converts.
+The secondary backend for GIF Forge; Wayland (portal) is primary.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
+import time
 from pathlib import Path
 from typing import List
 
@@ -30,8 +31,13 @@ FFMPEG = "ffmpeg"
 def build_x11grab_argv(
     area: RecordingArea, config: RecordingConfig, output_path: Path, display: str
 ) -> List[str]:
-    """Build the ffmpeg x11grab command (faithful to Peek's ordering)."""
-    argv: List[str] = [FFMPEG]
+    """Build the ffmpeg x11grab command (faithful to Peek's ordering).
+
+    ``-nostats -loglevel error`` keeps stderr near-empty: the recorder holds the
+    pipe open without a reader thread, so a chatty stderr would fill the pipe
+    buffer and deadlock ffmpeg mid-recording.
+    """
+    argv: List[str] = [FFMPEG, "-hide_banner", "-nostats", "-loglevel", "error"]
 
     if config.capture_sound and config.output_format == OutputFormat.WEBM:
         argv += ["-f", "pulse", "-i", "default", "-acodec", "vorbis"]
@@ -47,7 +53,10 @@ def build_x11grab_argv(
         argv += ["-draw_mouse", "0"]
 
     argv += ["-i", f"{display}+{area.left},{area.top}"]
-    argv += ["-filter:v", f"scale=iw/{config.downsample}:-1"]
+    # Even output dimensions: the user-drawn region is arbitrary, and odd sizes
+    # make yuv420p (WebM output) fail outright.
+    ds = config.downsample
+    argv += ["-filter:v", f"scale=trunc(iw/{ds}/2)*2:trunc(ih/{ds}/2)*2"]
     argv += _output_params(config)
     argv += ["-y", str(output_path)]
     return argv
@@ -56,7 +65,8 @@ def build_x11grab_argv(
 def _output_params(config: RecordingConfig) -> List[str]:
     """Intermediate codec params (ported from ffmpeg.vala add_output_parameters).
 
-    WebM output → quality VP9; everything else → lossless VP9 webm intermediate.
+    WebM output → quality VP9 (final, passed through); everything else →
+    lossless VP9 webm intermediate.
     """
     if config.output_format == OutputFormat.WEBM:
         params = [
@@ -70,9 +80,8 @@ def _output_params(config: RecordingConfig) -> List[str]:
     return params
 
 
-def intermediate_extension(config: RecordingConfig) -> str:
-    # Both WebM output and the lossless intermediate use a .webm container.
-    return "webm"
+def _decode_stderr(err: bytes | None) -> str:
+    return (err or b"").decode(errors="replace").strip()
 
 
 class X11Recorder(CaptureBackend):
@@ -90,7 +99,10 @@ class X11Recorder(CaptureBackend):
         if not area.is_valid():
             raise RecordingError("recording area has zero size")
         display = os.environ.get("DISPLAY") or ":0"
-        self.temp_file = create_temp_file(intermediate_extension(self.config))
+        self.temp_file = create_temp_file("webm")
+        # WebM is captured at final quality; the controller passes it through
+        # instead of re-encoding (a second lossy generation).
+        self.intermediate_is_final = self.config.output_format == OutputFormat.WEBM
         argv = build_x11grab_argv(area, self.config, self.temp_file, display)
         log.debug("x11grab: %s", " ".join(argv))
         try:
@@ -102,23 +114,45 @@ class X11Recorder(CaptureBackend):
             )
         except OSError as exc:
             raise RecordingError(f"failed to start ffmpeg: {exc}") from exc
+
+        # Catch immediate failures (bad geometry, missing x11grab, …) so the
+        # user sees ffmpeg's message instead of recording into the void.
+        time.sleep(0.2)
+        if self._proc.poll() is not None:
+            _, err = self._proc.communicate()
+            rc = self._proc.returncode
+            self._proc = None
+            self.state = CaptureState.FAILED
+            detail = _decode_stderr(err)
+            raise RecordingError(
+                f"ffmpeg exited immediately ({rc})" + (f":\n{detail}" if detail else "")
+            )
         self.state = CaptureState.RECORDING
 
     def stop(self) -> Path:
         if self._proc is None or self.temp_file is None:
             raise RecordingError("not recording")
         self.state = CaptureState.STOPPING
+        proc = self._proc
+        self._proc = None
+        err: bytes | None = b""
         try:
             # Graceful stop: ffmpeg finalizes the file when it reads 'q'.
-            self._proc.communicate(input=b"q", timeout=15)
+            _, err = proc.communicate(input=b"q", timeout=15)
         except subprocess.TimeoutExpired:
-            self._proc.terminate()
-            self._proc.wait(timeout=5)
-        rc = self._proc.returncode
-        self._proc = None
+            proc.terminate()
+            try:
+                _, err = proc.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+        rc = proc.returncode
         if rc not in (0, 255):  # 255 = ffmpeg's normal 'q' exit on some builds
             self.state = CaptureState.FAILED
-            raise RecordingError(f"ffmpeg exited with {rc}")
+            detail = _decode_stderr(err)
+            raise RecordingError(
+                f"ffmpeg exited with {rc}" + (f":\n{detail}" if detail else "")
+            )
         self.state = CaptureState.DONE
         return self.temp_file
 

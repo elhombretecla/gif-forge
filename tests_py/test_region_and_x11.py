@@ -39,10 +39,28 @@ def test_x11grab_argv_gif_path():
     assert "x11grab" in argv
     assert argv[argv.index("-video_size") + 1] == "640x480"
     assert argv[argv.index("-i") + 1] == ":0+100,200"
-    assert argv[argv.index("-filter:v") + 1] == "scale=iw/2:-1"
+    # Even output dimensions (yuv420p compatibility) while downsampling.
+    assert argv[argv.index("-filter:v") + 1] == "scale=trunc(iw/2/2)*2:trunc(ih/2/2)*2"
     # GIF path uses a lossless VP9 intermediate.
     assert "-lossless" in argv
     assert argv[-2:] == ["-y", "/tmp/out.webm"]
+
+
+def test_x11grab_stderr_stays_quiet():
+    # Without -nostats ffmpeg fills the un-read stderr pipe on long recordings
+    # and deadlocks; these flags must never be dropped.
+    cfg = RecordingConfig()
+    argv = build_x11grab_argv(RecordingArea(0, 0, 100, 100), cfg, Path("/o.webm"), ":0")
+    assert "-nostats" in argv
+    assert argv[argv.index("-loglevel") + 1] == "error"
+
+
+def test_x11grab_webm_output_is_final_quality():
+    cfg = RecordingConfig(output_format=OutputFormat.WEBM)
+    argv = build_x11grab_argv(RecordingArea(0, 0, 100, 100), cfg, Path("/o.webm"), ":0")
+    # WebM is captured at final quality and passed through (no second encode).
+    assert "-crf" in argv and "-lossless" not in argv
+    assert argv[argv.index("-pix_fmt") + 1] == "yuv420p"
 
 
 def test_x11grab_framerate_floor_is_6():

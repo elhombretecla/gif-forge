@@ -7,7 +7,8 @@ import tempfile
 from pathlib import Path
 
 import gi
-gi.require_version("Gtk", "4.0"); gi.require_version("Adw", "1")
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
 from gi.repository import GLib
 
 from gifforge.project import SessionCache, list_recoverable

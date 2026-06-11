@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import threading
 from pathlib import Path
-from typing import List, Optional, Sequence
+from typing import List, Sequence
 
 from ..models import OutputFormat
 from ..utils import check_for_executable, create_temp_file
@@ -19,9 +19,20 @@ from .runner import run_command
 
 GIFSKI = "gifski"
 
+# Frame paths are passed as argv; stay well under the kernel's ARG_MAX
+# (typically ~2 MiB) so very long recordings fail over to ffmpeg instead of
+# dying with E2BIG.
+_ARGV_BYTES_LIMIT = 1_500_000
+
 
 def is_available() -> bool:
     return check_for_executable(GIFSKI)
+
+
+def frames_within_argv_limit(frames: Sequence[Path]) -> bool:
+    """Whether *frames* can safely be passed to gifski on the command line."""
+    total = sum(len(str(f)) + 1 for f in frames)
+    return total < _ARGV_BYTES_LIMIT
 
 
 def build_gifski_argv(
@@ -42,7 +53,7 @@ def encode_gif(
     fps: int,
     quality: int,
     *,
-    cancel_event: Optional[threading.Event] = None,
+    cancel_event: threading.Event | None = None,
 ) -> Path:
     output = create_temp_file(OutputFormat.GIF.file_extension)
     run_command(

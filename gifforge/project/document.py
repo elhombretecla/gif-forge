@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 from ..frames.model import FrameList
 from ..models import OutputFormat
@@ -26,7 +25,7 @@ class ProjectDocument:
     frames: FrameList
     output_format: OutputFormat = OutputFormat.GIF
     created: str = ""  # ISO-8601 timestamp, set on first save
-    path: Optional[Path] = None  # last saved/loaded location
+    path: Path | None = None  # last saved/loaded location
     overlays: list = field(default_factory=list)  # annotation overlays
     metadata: dict = field(default_factory=dict)
 

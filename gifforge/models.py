@@ -35,7 +35,7 @@ class OutputFormat(enum.Enum):
         }[self]
 
     @classmethod
-    def from_value(cls, value: str) -> "OutputFormat":
+    def from_value(cls, value: str) -> OutputFormat:
         return cls(value.lower())
 
 
@@ -61,6 +61,8 @@ class RecordingConfig:
             raise ValueError(f"framerate out of range: {self.framerate}")
         if not 1 <= self.downsample <= 4:
             raise ValueError(f"downsample out of range: {self.downsample}")
+        if not 0 <= self.start_delay <= 60:
+            raise ValueError(f"start_delay out of range: {self.start_delay}")
         if not 20 <= self.gifski_quality <= 100:
             raise ValueError(f"gifski_quality out of range: {self.gifski_quality}")
 
@@ -78,7 +80,7 @@ class RecordingArea:
     width: int
     height: int
 
-    def clipped_to(self, screen_width: int, screen_height: int) -> "RecordingArea":
+    def clipped_to(self, screen_width: int, screen_height: int) -> RecordingArea:
         """Clip the area to the visible screen bounds (logical coordinates)."""
         left = min(max(0, self.left), screen_width)
         top = min(max(0, self.top), screen_height)
@@ -90,7 +92,7 @@ class RecordingArea:
             height = screen_height - top
         return RecordingArea(left, top, width, height)
 
-    def scaled(self, scale_factor: int) -> "RecordingArea":
+    def scaled(self, scale_factor: int) -> RecordingArea:
         """Scale logical coordinates to device pixels on HiDPI screens."""
         return RecordingArea(
             self.left * scale_factor,

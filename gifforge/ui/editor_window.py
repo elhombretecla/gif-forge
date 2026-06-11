@@ -76,7 +76,7 @@ class EditorWindow(Adw.ApplicationWindow):
         # Project/session state.
         self._session_id = f"editor-{os.getpid()}-{int(time.time())}-{id(self) & 0xffff}"
         self._session_cache: SessionCache | None = None
-        self._project_path = None
+        self._project_path: Path | None = None
         self._output_format = OutputFormat.GIF
         self._overlays: list = []
         self._clipboard: list = []  # copied/cut frames
@@ -687,7 +687,10 @@ class EditorWindow(Adw.ApplicationWindow):
         chooser.show()
 
     def _on_save_project_response(self, chooser, response: int) -> None:
-        path = chooser.get_file().get_path() if response == Gtk.ResponseType.ACCEPT else None
+        path = None
+        if response == Gtk.ResponseType.ACCEPT:
+            gfile = chooser.get_file()
+            path = gfile.get_path() if gfile is not None else None
         chooser.destroy()
         self._save_chooser = None
         if path:
@@ -699,9 +702,15 @@ class EditorWindow(Adw.ApplicationWindow):
         from pathlib import Path as _Path
 
         doc = self._document()
-        save_project(doc, _Path(path))
+        try:
+            save_project(doc, _Path(path))
+        except (OSError, ValueError) as exc:
+            log.exception("saving project to %s failed", path)
+            self._show_error(_("Could not save project"), str(exc))
+            return
         self._project_path = doc.path
-        self._recents.add(doc.path)
+        if doc.path is not None:
+            self._recents.add(doc.path)
         self.set_title(f"{doc.title} — GIF Forge")
         self._status.set_label(_("Saved project to {path}").format(path=doc.path))
 
@@ -717,7 +726,10 @@ class EditorWindow(Adw.ApplicationWindow):
         chooser.show()
 
     def _on_open_project_response(self, chooser, response: int) -> None:
-        path = chooser.get_file().get_path() if response == Gtk.ResponseType.ACCEPT else None
+        path = None
+        if response == Gtk.ResponseType.ACCEPT:
+            gfile = chooser.get_file()
+            path = gfile.get_path() if gfile is not None else None
         chooser.destroy()
         self._open_chooser = None
         if path:
@@ -730,6 +742,7 @@ class EditorWindow(Adw.ApplicationWindow):
         try:
             document = load_project(_Path(path), cache)
         except Exception as exc:  # noqa: BLE001
+            log.exception("opening project %s failed", path)
             cache.cleanup()
             self._show_error(_("Could not open project"), str(exc))
             return

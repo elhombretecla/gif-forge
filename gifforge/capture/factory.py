@@ -13,7 +13,6 @@ from __future__ import annotations
 import enum
 import logging
 import os
-from typing import Optional
 
 from ..models import RecordingConfig
 from .backend import CaptureBackend
@@ -38,7 +37,7 @@ def detect_session() -> SessionType:
 
 
 def create_backend(
-    config: RecordingConfig, *, prefer: Optional[str] = None
+    config: RecordingConfig, *, prefer: str | None = None
 ) -> CaptureBackend:
     """Create the best available capture backend.
 

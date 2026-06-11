@@ -25,7 +25,7 @@ class Frame:
     delay_ms: int
     source_index: int  # position in the original recording, for reference
 
-    def clone(self) -> "Frame":
+    def clone(self) -> Frame:
         return copy.copy(self)
 
 
@@ -53,7 +53,7 @@ class FrameList:
     def paths(self) -> List[Path]:
         return [f.path for f in self._frames]
 
-    def copy(self) -> "FrameList":
+    def copy(self) -> FrameList:
         return FrameList(f.clone() for f in self._frames)
 
     def to_list(self) -> List[Frame]:

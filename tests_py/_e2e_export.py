@@ -7,7 +7,8 @@ import tempfile
 from pathlib import Path
 
 import gi
-gi.require_version("Gtk", "4.0"); gi.require_version("Adw", "1")
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib
 
 from gifforge.project.cache import SessionCache
@@ -69,7 +70,9 @@ def main():
                     and state["exported_frames"] == 10
                 )
             finally:
-                cache.cleanup(); sample.unlink(missing_ok=True); DEST.unlink(missing_ok=True)
+                cache.cleanup()
+                sample.unlink(missing_ok=True)
+                DEST.unlink(missing_ok=True)
                 app.quit()
             return False
 

@@ -51,3 +51,16 @@ def test_to_recording_config(settings):
     assert config.output_format is OutputFormat.APNG
     assert config.gifski_quality == 80
     config.validate()  # should not raise
+
+
+def test_to_recording_config_clamps_hand_edited_values(settings):
+    # The JSON file can be edited by hand: bad values must degrade, not raise.
+    settings.set("recording-framerate", 999)
+    settings.set("recording-downsample", 0)
+    settings.set("recording-output-format", "bogus")
+
+    config = settings.to_recording_config()
+    assert config.framerate == 60
+    assert config.downsample == 1
+    assert config.output_format is OutputFormat.GIF
+    config.validate()  # should not raise

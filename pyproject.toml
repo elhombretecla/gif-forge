@@ -15,7 +15,7 @@ authors = [{ name = "Juan de la Cruz García", email = "delacruzgarciajuan@gmail
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=7"]
+dev = ["pytest>=7", "ruff", "mypy"]
 
 [project.scripts]
 gif-forge = "gifforge.ui.application:main"
@@ -25,3 +25,23 @@ include = ["gifforge*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests_py"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["build"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "UP"]
+ignore = [
+  "E501",  # long lines: GTK/ffmpeg argv code reads better unwrapped
+  "E402",  # gi.require_version() must run before gi.repository imports
+  "UP035", "UP006",  # typing.List/Optional style kept for Python 3.10 floor
+]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+check_untyped_defs = false
+# PyGObject has no usable stubs; keep mypy to obvious wins.
+disable_error_code = ["annotation-unchecked"]

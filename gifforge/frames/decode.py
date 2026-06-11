@@ -15,9 +15,8 @@ from __future__ import annotations
 import logging
 import threading
 from pathlib import Path
-from typing import Optional
 
-from ..encode.ffmpeg import FFMPEG
+from ..encode.ffmpeg import FFMPEG_BASE
 from ..encode.runner import run_command
 from ..project.cache import SessionCache
 from .model import Frame, FrameList
@@ -30,14 +29,14 @@ def decode_to_frames(
     fps: int,
     cache: SessionCache,
     *,
-    cancel_event: Optional[threading.Event] = None,
+    cancel_event: threading.Event | None = None,
 ) -> FrameList:
     """Extract every frame of *input_path* into *cache* and return a FrameList."""
     if fps <= 0:
         raise ValueError("fps must be positive")
 
     pattern = cache.frame_output_pattern
-    argv = [FFMPEG, "-y", "-i", str(input_path), str(pattern)]
+    argv = [*FFMPEG_BASE, "-i", str(input_path), str(pattern)]
     log.debug("decoding frames: %s", " ".join(argv))
     run_command(argv, cancel_event=cancel_event)
 

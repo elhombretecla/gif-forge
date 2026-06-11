@@ -82,7 +82,6 @@ def test_reverse_undo_redo():
 def test_set_delay_undo_is_not_noop():
     # The bug guard: in-place delay edits must be reversible.
     tl = Timeline(make_frames(3, delay=100))
-    before = (order(tl.frames), delays(tl.frames))
     tl.execute(SetDelay([0, 1, 2], 250))
     assert delays(tl.frames) == [250, 250, 250]
     tl.undo()

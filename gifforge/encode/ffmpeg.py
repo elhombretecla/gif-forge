@@ -3,8 +3,11 @@
 
 """FFmpeg-based encoding (GIF 2-pass, APNG, WebM).
 
-Command-line flags are ported verbatim from Peek's
-``ffmpeg-post-processor.vala`` and ``ffmpeg.vala`` so output matches Peek.
+The GIF path keeps Peek's 2-pass palette structure but tunes it for screen
+captures: ``palettegen=stats_mode=diff`` weights the palette towards pixels
+that actually change, and ``paletteuse=dither=bayer:diff_mode=rectangle`` only
+re-encodes the changing rectangle per frame, which shrinks screencast GIFs
+substantially. APNG is true-colour, so it is encoded directly (no palette).
 
 The ``build_*_argv`` helpers are pure (no subprocess) for unit testing; the
 ``*_to`` functions execute them.
@@ -14,7 +17,7 @@ from __future__ import annotations
 
 import threading
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 from ..models import OutputFormat
 from ..utils import create_temp_file
@@ -22,16 +25,23 @@ from .runner import run_command
 
 FFMPEG = "ffmpeg"
 
+# Shared prefix: quiet output (stderr stays small even on long runs) and no
+# stdin probing, so ffmpeg can never stall waiting on either stream.
+FFMPEG_BASE: List[str] = [FFMPEG, "-hide_banner", "-nostdin", "-y"]
+
+PALETTEGEN = "palettegen=stats_mode=diff"
+PALETTEUSE = "paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle"
+
 
 # --- pure argv builders (unit-testable) --------------------------------------
 
 
 def build_palette_argv(input_path: Path, fps: int, palette_path: Path) -> List[str]:
-    """ffmpeg pass 1: generate an optimized palette for the GIF/APNG."""
+    """ffmpeg pass 1: generate an optimized palette for the GIF."""
     return [
-        FFMPEG, "-y",
+        *FFMPEG_BASE,
         "-i", str(input_path),
-        "-vf", f"fps={fps},palettegen",
+        "-vf", f"fps={fps},{PALETTEGEN}",
         str(palette_path),
     ]
 
@@ -41,27 +51,34 @@ def build_animation_argv(
     palette_path: Path,
     fps: int,
     output_path: Path,
-    *,
-    output_format: OutputFormat = OutputFormat.GIF,
 ) -> List[str]:
-    """ffmpeg pass 2: apply the palette to produce the final GIF/APNG."""
-    argv = [
-        FFMPEG, "-y",
+    """ffmpeg pass 2: apply the palette to produce the final GIF."""
+    return [
+        *FFMPEG_BASE,
         "-i", str(input_path),
         "-i", str(palette_path),
-        "-filter_complex", f"fps={fps},paletteuse",
+        "-filter_complex", f"fps={fps},{PALETTEUSE}",
+        str(output_path),
     ]
-    if output_format == OutputFormat.APNG:
-        # Loop forever, matching Peek.
-        argv += ["-plays", "0"]
-    argv.append(str(output_path))
-    return argv
+
+
+def build_apng_argv(input_path: Path, fps: int, output_path: Path) -> List[str]:
+    """Encode APNG directly: it is true-colour, so a 256-colour palette pass
+    would only degrade it."""
+    return [
+        *FFMPEG_BASE,
+        "-i", str(input_path),
+        "-vf", f"fps={fps}",
+        "-f", "apng",
+        "-plays", "0",  # loop forever, matching Peek
+        str(output_path),
+    ]
 
 
 def build_webm_argv(input_path: Path, fps: int, output_path: Path) -> List[str]:
     """Encode the captured video to VP9 WebM (ported from ffmpeg.vala)."""
     return [
-        FFMPEG, "-y",
+        *FFMPEG_BASE,
         "-i", str(input_path),
         "-codec:v", "libvpx-vp9",
         "-qmin", "10",
@@ -76,30 +93,27 @@ def build_webm_argv(input_path: Path, fps: int, output_path: Path) -> List[str]:
 
 def build_extract_frames_argv(input_path: Path, pattern: Path) -> List[str]:
     """Extract PNG frames (pass before gifski). Ported from extract-frames."""
-    return [FFMPEG, "-y", "-i", str(input_path), str(pattern)]
+    return [*FFMPEG_BASE, "-i", str(input_path), str(pattern)]
 
 
 # --- executors ----------------------------------------------------------------
 
 
-def encode_gif_or_apng(
+def encode_gif(
     input_path: Path,
     fps: int,
     *,
-    output_format: OutputFormat = OutputFormat.GIF,
-    cancel_event: Optional[threading.Event] = None,
+    cancel_event: threading.Event | None = None,
 ) -> Path:
-    """Two-pass GIF/APNG encode. Returns the output file path."""
+    """Two-pass GIF encode. Returns the output file path."""
     palette = create_temp_file("png")
     try:
         run_command(
             build_palette_argv(input_path, fps, palette), cancel_event=cancel_event
         )
-        output = create_temp_file(output_format.file_extension)
+        output = create_temp_file(OutputFormat.GIF.file_extension)
         run_command(
-            build_animation_argv(
-                input_path, palette, fps, output, output_format=output_format
-            ),
+            build_animation_argv(input_path, palette, fps, output),
             cancel_event=cancel_event,
         )
         return output
@@ -107,8 +121,19 @@ def encode_gif_or_apng(
         palette.unlink(missing_ok=True)
 
 
+def encode_apng(
+    input_path: Path,
+    fps: int,
+    *,
+    cancel_event: threading.Event | None = None,
+) -> Path:
+    output = create_temp_file(OutputFormat.APNG.file_extension)
+    run_command(build_apng_argv(input_path, fps, output), cancel_event=cancel_event)
+    return output
+
+
 def encode_webm(
-    input_path: Path, fps: int, *, cancel_event: Optional[threading.Event] = None
+    input_path: Path, fps: int, *, cancel_event: threading.Event | None = None
 ) -> Path:
     output = create_temp_file(OutputFormat.WEBM.file_extension)
     run_command(build_webm_argv(input_path, fps, output), cancel_event=cancel_event)
@@ -116,7 +141,7 @@ def encode_webm(
 
 
 def extract_frames(
-    input_path: Path, *, cancel_event: Optional[threading.Event] = None
+    input_path: Path, *, cancel_event: threading.Event | None = None
 ) -> List[Path]:
     """Extract frames as ``<input>.NNNN.png`` and return them sorted."""
     pattern = input_path.with_name(input_path.name + ".%04d.png")

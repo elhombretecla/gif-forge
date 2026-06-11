@@ -21,7 +21,7 @@ import locale
 import logging
 import os
 import sys
-from typing import List, Optional
+from typing import List
 
 log = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ def _candidate_localedirs() -> List[str]:
     return dirs
 
 
-def find_localedir() -> Optional[str]:
+def find_localedir() -> str | None:
     """Return the locale dir that actually holds a compiled gif-forge catalogue.
 
     Returns ``None`` if none is found, letting gettext fall back to the system
@@ -68,7 +68,7 @@ def find_localedir() -> Optional[str]:
     return None
 
 
-def init(language: Optional[str] = None) -> None:
+def init(language: str | None = None) -> None:
     """Set up gettext for the whole process.
 
     *language* is the preferred UI language code ("en", "es", …) or ``None``/

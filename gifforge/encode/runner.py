@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 import subprocess
 import threading
-from typing import Optional, Sequence
+from typing import Sequence
 
 from .errors import CancelledError, EncodeError
 
@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 def run_command(
     argv: Sequence[str],
     *,
-    cancel_event: Optional[threading.Event] = None,
+    cancel_event: threading.Event | None = None,
     poll_interval: float = 0.1,
 ) -> str:
     """Run *argv* to completion, returning combined stdout+stderr.
@@ -52,7 +52,7 @@ def run_command(
                 if cancel_event is not None and cancel_event.is_set():
                     proc.kill()
                     proc.wait()
-                    raise CancelledError("encoding cancelled")
+                    raise CancelledError("encoding cancelled") from None
                 continue
     finally:
         if proc.poll() is None:

@@ -18,7 +18,7 @@ aliases the live frame objects.
 from __future__ import annotations
 
 import logging
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 from ..frames.model import FrameList
 from .commands import Command, ReplaceFrames
@@ -51,11 +51,11 @@ class Timeline:
         return bool(self._redo)
 
     @property
-    def undo_label(self) -> Optional[str]:
+    def undo_label(self) -> str | None:
         return self._undo[-1][0] if self._undo else None
 
     @property
-    def redo_label(self) -> Optional[str]:
+    def redo_label(self) -> str | None:
         return self._redo[-1][0] if self._redo else None
 
     # --- mutation ------------------------------------------------------------
@@ -67,7 +67,7 @@ class Timeline:
         self._redo.clear()
         log.debug("executed %s (%d frames)", command.label, len(self.frames))
 
-    def undo(self) -> Optional[str]:
+    def undo(self) -> str | None:
         if not self._undo:
             return None
         label, before = self._undo.pop()
@@ -76,7 +76,7 @@ class Timeline:
         self._redo.append((label, after))
         return label
 
-    def redo(self) -> Optional[str]:
+    def redo(self) -> str | None:
         if not self._redo:
             return None
         label, after = self._redo.pop()
