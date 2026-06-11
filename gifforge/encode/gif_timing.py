@@ -43,7 +43,7 @@ def delays_centiseconds(delays_ms: Sequence[int]) -> List[int]:
     return out
 
 
-def _skip_sub_blocks(data: bytes, pos: int) -> int:
+def _skip_sub_blocks(data: bytes | bytearray, pos: int) -> int:
     """Return the offset just past a sub-block chain starting at *pos*."""
     while pos < len(data):
         size = data[pos]
@@ -54,7 +54,7 @@ def _skip_sub_blocks(data: bytes, pos: int) -> int:
     raise ValueError("truncated sub-block chain")
 
 
-def _gce_delay_offsets(data: bytes) -> List[int]:
+def _gce_delay_offsets(data: bytes | bytearray) -> List[int]:
     """Byte offsets of each Graphic Control Extension's delay field."""
     if data[:3] != b"GIF" or len(data) < 13:
         raise ValueError("not a GIF file")
