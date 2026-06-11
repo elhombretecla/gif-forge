@@ -56,6 +56,15 @@
   <url type="bugtracker">https://github.com/elhombretecla/gif-forge/issues</url>
 
   <releases>
+    <release version="0.1.2" date="2026-06-11">
+      <description>
+        <p>Fixes single-frame "wallpaper flashes" in recordings made on X11
+        under a compositing desktop (seen on GNOME Shell with NVIDIA): glitch
+        frames the capture race produces are now detected and repaired before
+        export. Also fixes GIF exports playing with uneven frame timing
+        (120/80 ms instead of the edited 100 ms delays).</p>
+      </description>
+    </release>
     <release version="0.1.1" date="2026-06-02">
       <description>
         <p>Fixes the capture region showing as opaque grey — and recording a

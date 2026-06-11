@@ -1,5 +1,5 @@
 Name:           gif-forge
-Version:        0.1.1
+Version:        0.1.2
 Release:        1%{?dist}
 Summary:        Modern Linux screen recorder and GIF/video editor
 
@@ -69,6 +69,11 @@ appstream-util validate-relax --nonet \
 %{_datadir}/icons/hicolor/*/apps/%{appid}.png
 
 %changelog
+* Thu Jun 11 2026 Juan de la Cruz García <delacruzgarciajuan@gmail.com> - 0.1.2-1
+- Fix single-frame wallpaper flashes in X11 recordings (capture race with the
+  compositor); glitch frames are detected and repaired before export.
+- Fix uneven GIF frame timing from the editor export (120/80 ms jitter).
+
 * Tue Jun 02 2026 Juan de la Cruz García <delacruzgarciajuan@gmail.com> - 0.1.1-1
 - Fix opaque-grey / frozen single-frame capture on X11 without a compositor
   (XShape see-through hole over the capture area).

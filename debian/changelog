@@ -1,3 +1,13 @@
+gif-forge (0.1.2) unstable; urgency=medium
+
+  * Fix single-frame wallpaper flashes in X11 recordings under a compositing
+    desktop (x11grab racing the compositor repaint, seen on GNOME + NVIDIA):
+    glitch frames are detected and repaired in every export path.
+  * Fix uneven GIF frame timing from the editor export (100 ms frames came
+    out as alternating 120/80 ms delays).
+
+ -- Juan de la Cruz García <delacruzgarciajuan@gmail.com>  Thu, 11 Jun 2026 12:54:00 +0200
+
 gif-forge (0.1.1) unstable; urgency=medium
 
   * Fix the capture region rendering as opaque grey — and recording a single
